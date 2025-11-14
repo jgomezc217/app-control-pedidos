@@ -126,7 +126,15 @@
 
         // Variables Globales del Entorno (MANDATORIAS)
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'spicy-honey-app';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        
+        let firebaseConfig = {};
+        try {
+            // Intenta parsear la configuración. Usa {} si no está definida.
+            firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        } catch (e) {
+            console.error("Error al parsear __firebase_config:", e);
+        }
+        
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         let db;
@@ -603,6 +611,11 @@
 
         async function initFirebase() {
             try {
+                // VERIFICACIÓN AÑADIDA: Asegura que la configuración no esté vacía
+                if (!firebaseConfig || Object.keys(firebaseConfig).length === 0) {
+                    throw new Error("La configuración de la base de datos (projectId) está ausente o vacía.");
+                }
+                
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
@@ -629,6 +642,7 @@
 
             } catch (error) {
                 console.error("Error en la inicialización de Firebase:", error);
+                // Muestra un mensaje de error más claro al usuario
                 $id('loader').innerHTML = `<p class="text-chili font-bold">Error Fatal: No se pudo conectar a la base de datos. ${error.message}</p>`;
             }
         }
