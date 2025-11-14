@@ -14,7 +14,6 @@
                     colors: {
                         'honey': '#F9C74F',
                         'chili': '#E63946',
-                        // Se elimina 'dark-bg' ya que usaremos blanco
                         'light-bg': '#F8F8F8', // Gris muy claro para minimalismo
                     },
                     fontFamily: {
@@ -106,9 +105,10 @@
             <p class="mt-4 text-gray-700">Conectando a la base de datos...</p>
         </div>
 
-        <!-- Contenedores de las dos Vistas -->
+        <!-- Contenedores de las tres Vistas: Configuración, Ventas y Reporte -->
         <div id="setup-view" class="hidden"></div>
         <div id="sales-view" class="hidden"></div>
+        <div id="report-view" class="hidden"></div> <!-- NUEVA VISTA DE REPORTE -->
 
         <!-- Mensajes del sistema (Error, Éxito) -->
         <div id="message-container" class="fixed bottom-4 right-4 z-50"></div>
@@ -185,6 +185,26 @@
         };
 
         /**
+         * Helper function to switch between views
+         */
+        function switchView(viewName) {
+            $id('setup-view').classList.add('hidden');
+            $id('sales-view').classList.add('hidden');
+            $id('report-view').classList.add('hidden');
+
+            if (viewName === 'setup') {
+                $id('setup-view').classList.remove('hidden');
+            } else if (viewName === 'sales') {
+                $id('sales-view').classList.remove('hidden');
+                renderSalesView(); // Re-render if switching to sales
+            } else if (viewName === 'report') {
+                $id('report-view').classList.remove('hidden');
+                // Ensure report view is rendered if switched to
+                if (currentEventData) renderReportView();
+            }
+        }
+
+        /**
          * Intenta cargar el evento activo para el día de hoy.
          * Si no existe, prepara la vista de configuración.
          */
@@ -202,6 +222,7 @@
                 if (querySnapshot.empty) {
                     activeEventId = null;
                     currentEventData = null;
+                    switchView('setup');
                     renderSetupView(today);
                     showMessage("No hay evento activo para hoy. Por favor, configura el inventario.", 'info');
                 } else {
@@ -215,7 +236,8 @@
             } catch (error) {
                 console.error("Error cargando evento activo:", error);
                 showMessage("Error al cargar el evento: " + error.message, 'error');
-                renderSetupView(today); // Fallback a configuración
+                switchView('setup'); // Fallback a configuración
+                renderSetupView(today); 
             }
         }
 
@@ -226,7 +248,17 @@
             onSnapshot(eventDocRef, (docSnap) => {
                 if (docSnap.exists()) {
                     currentEventData = docSnap.data();
-                    renderSalesView(); // Redibuja la vista de ventas con los datos actualizados
+                    
+                    // Comprueba qué vista está activa y renderiza solo esa
+                    if (!$id('sales-view').classList.contains('hidden')) {
+                        renderSalesView(); // Redibuja la vista de ventas
+                    } else if (!$id('report-view').classList.contains('hidden')) {
+                        renderReportView(); // Redibuja la vista de reportes
+                    } else {
+                         // Si ninguna vista está activa (como al inicio), por defecto a ventas
+                         switchView('sales');
+                    }
+                    
                     showMessage(`Inventario actualizado en tiempo real.`, 'success');
                 } else {
                     showMessage("El evento activo ha sido eliminado. Redirigiendo a configuración.", 'error');
@@ -245,9 +277,7 @@
 
         /** Renderiza la Vista de Configuración del Evento (Requisito 1 & 2) */
         function renderSetupView(defaultDate) {
-            $id('setup-view').classList.remove('hidden');
-            $id('sales-view').classList.add('hidden');
-
+            // El cambio de vista ahora se hace con switchView
             const html = `
                 <!-- Tarjeta principal minimalista (Fondo blanco, borde y sombra sutil) -->
                 <div class="card bg-white p-6 rounded-xl"> 
@@ -296,7 +326,6 @@
             `;
             $id('setup-view').innerHTML = html;
             $id('save-event-btn').addEventListener('click', saveEventConfiguration);
-            $id('loader').classList.add('hidden');
         }
 
         /** Guarda la configuración del evento en Firestore. */
@@ -388,6 +417,7 @@
                 showMessage("✅ Evento iniciado y configuración guardada con éxito!", 'success');
                 // Esto desencadenará el listener y la renderización de la vista de ventas
                 setupRealtimeListener(activeEventId);
+                switchView('sales'); // Asegura la transición a la vista de ventas
             } catch (error) {
                 console.error("Error al guardar la configuración:", error);
                 showMessage("❌ Error al guardar: " + error.message, 'error');
@@ -400,9 +430,6 @@
         /** Renderiza la Vista de Ventas (Requisito 3) */
         function renderSalesView() {
             if (!currentEventData) return;
-
-            $id('setup-view').classList.add('hidden');
-            $id('sales-view').classList.remove('hidden');
 
             const inventoryHtml = PRODUCT_LEVELS.map(level => {
                 const p = currentEventData.products[level] || {};
@@ -436,8 +463,15 @@
             `).join('');
 
             const viewHtml = `
-                <!-- Título del evento en gris oscuro -->
-                <h2 class="text-2xl font-bold mb-4 text-center text-gray-900">${currentEventData.eventName}</h2>
+                <!-- Título del evento y botón de Reporte -->
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900">${currentEventData.eventName}</h2>
+                    <button id="switch-to-report" class="flex items-center text-sm btn-chili py-2 px-4 rounded-lg font-semibold">
+                        <!-- Icono de reporte/gráfico -->
+                        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m-6 0h6"></path></svg>
+                        Ver Reporte
+                    </button>
+                </div>
 
                 <!-- Sección de Inventario -->
                 <div class="grid sm:grid-cols-3 gap-4 mb-8">
@@ -478,6 +512,128 @@
             $id('cart-list').querySelectorAll('.remove-from-cart').forEach(btn => {
                 btn.addEventListener('click', removeFromCart);
             });
+            $id('switch-to-report').addEventListener('click', () => switchView('report'));
+        }
+
+        /** Renderiza la Vista de Reporte de Ventas (NUEVA FUNCIÓN) */
+        function renderReportView() {
+            if (!currentEventData) {
+                switchView('setup'); // Fallback if no data
+                return;
+            }
+
+            const salesLog = currentEventData.salesLog || [];
+            let totalRevenue = 0;
+            let totalUnitsSold = 0;
+            const unitsByLevel = {}; // { 'Bajo': 10, 'Medio': 5, ... }
+
+            // 1. Cálculos de Ventas
+            salesLog.forEach(sale => {
+                totalRevenue += sale.total;
+                for (const level in sale.items) {
+                    const qty = sale.items[level];
+                    totalUnitsSold += qty;
+                    unitsByLevel[level] = (unitsByLevel[level] || 0) + qty;
+                }
+            });
+
+            // 2. Resumen de Inventario
+            const inventorySummaryHtml = PRODUCT_LEVELS.map(level => {
+                const p = currentEventData.products[level] || {};
+                const starting = p.startingInventory || 0;
+                const current = p.currentInventory || 0;
+                const sold = starting - current;
+                // Previene división por cero
+                const remainingPercentage = starting > 0 ? ((current / starting) * 100).toFixed(0) : 0; 
+                // Color de la barra de progreso
+                const progressColor = current > starting * 0.2 ? 'bg-green-500' : 'bg-chili';
+
+                return `
+                    <div class="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                        <h4 class="font-bold text-lg text-gray-800">${level} Picante</h4>
+                        <div class="mt-2 text-sm text-gray-600">
+                            <p>Inicial: <span class="font-semibold text-gray-900">${starting}</span></p>
+                            <p>Vendidas: <span class="font-semibold text-chili">${sold}</span></p>
+                            <p>Restantes: <span class="font-semibold text-gray-900">${current}</span></p>
+                        </div>
+                        <div class="mt-3">
+                            <div class="h-2 rounded-full bg-gray-200">
+                                <div class="h-2 rounded-full ${progressColor}" style="width: ${remainingPercentage}%;"></div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">${remainingPercentage}% Restante</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // 3. Resumen de Transacciones (Ordenado de la más reciente a la más antigua)
+            const transactionsHtml = salesLog.length > 0 ? salesLog.slice().reverse().map((sale, index) => {
+                // Firestore Timestamp object needs to be converted to Date
+                const saleTime = sale.time && sale.time.seconds ? new Date(sale.time.seconds * 1000) : new Date();
+                const saleDate = saleTime.toLocaleString('es-SV', {
+                    year: 'numeric', month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+                const itemsList = Object.keys(sale.items).map(level => `${sale.items[level]}x ${level}`).join(', ');
+
+                return `
+                    <div class="flex justify-between items-center py-3 border-b border-gray-100">
+                        <div>
+                            <!-- El índice se calcula al revés para que la más reciente sea Venta #1 -->
+                            <p class="font-semibold text-gray-800">Venta #${salesLog.length - index}</p> 
+                            <p class="text-xs text-gray-500">${itemsList}</p>
+                            <p class="text-xs text-gray-500">${saleDate}</p>
+                        </div>
+                        <span class="text-lg font-extrabold text-chili">${formatCurrency(sale.total)}</span>
+                    </div>
+                `;
+            }).join('') : '<p class="text-gray-600 italic p-4 text-center">Aún no hay ventas registradas en este evento.</p>';
+
+
+            const html = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900">Reporte de Evento: ${currentEventData.eventName}</h2>
+                    <button id="switch-to-sales" class="flex items-center text-sm btn-honey py-2 px-4 rounded-lg font-semibold">
+                        <!-- Icono de carrito de compras -->
+                        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        Volver a Ventas
+                    </button>
+                </div>
+
+                <!-- Resumen Financiero -->
+                <div class="grid grid-cols-3 gap-4 mb-8">
+                    <div class="card bg-gray-50 p-4 rounded-xl text-center">
+                        <p class="text-sm font-medium text-gray-600">Ingreso Total</p>
+                        <p class="text-3xl font-extrabold text-green-600 mt-1">${formatCurrency(totalRevenue)}</p>
+                    </div>
+                    <div class="card bg-gray-50 p-4 rounded-xl text-center">
+                        <p class="text-sm font-medium text-gray-600">Unidades Vendidas</p>
+                        <p class="text-3xl font-extrabold text-chili mt-1">${totalUnitsSold}</p>
+                    </div>
+                    <div class="card bg-gray-50 p-4 rounded-xl text-center">
+                        <p class="text-sm font-medium text-gray-600">Transacciones</p>
+                        <p class="text-3xl font-extrabold text-gray-800 mt-1">${salesLog.length}</p>
+                    </div>
+                </div>
+
+                <!-- Detalle de Inventario -->
+                <div class="card bg-white p-6 rounded-xl mb-8">
+                    <h3 class="text-xl font-bold mb-4 text-gray-900">Estado del Inventario</h3>
+                    <div class="grid sm:grid-cols-3 gap-4">
+                        ${inventorySummaryHtml}
+                    </div>
+                </div>
+
+                <!-- Log de Transacciones -->
+                <div class="card bg-white p-6 rounded-xl">
+                    <h3 class="text-xl font-bold mb-4 text-gray-900">Registro de Transacciones (Más Recientes)</h3>
+                    <div class="max-h-96 overflow-y-auto">
+                        ${transactionsHtml}
+                    </div>
+                </div>
+            `;
+            $id('report-view').innerHTML = html;
+            $id('switch-to-sales').addEventListener('click', () => switchView('sales'));
         }
 
         // --- Lógica de Venta (Requisito 3) ---
@@ -593,7 +749,7 @@
                 // Transacción exitosa
                 showMessage(`🎉 Venta de ${formatCurrency(totalSale)} confirmada! Inventario actualizado.`, 'success');
                 salesCart = []; // Limpiar carrito
-                renderSalesView(); // Redibuja la vista de ventas
+                // El listener en tiempo real se encargará de llamar a renderSalesView/renderReportView
             } catch (error) {
                 console.error("Error al procesar la venta:", error);
                 if (typeof error === 'string') {
