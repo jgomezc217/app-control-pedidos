@@ -3,808 +3,194 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌶️ Miel Picante - Control de Evento</title>
-    <!-- Incluir Tailwind CSS para estilos modernos y responsivos -->
+    <title>POS Miel Picante</title>
+    <!-- Carga Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Configuración de Fuentes y Estilos Base de Tailwind -->
+    <style>
+        /* Estilo personalizado para un diseño limpio y enfocado al POS */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            touch-action: manipulation; /* Mejor manejo táctil en móviles */
+        }
+        .main-card {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .btn-primary {
+            background-color: #ff5722; /* Tono naranja/rojo de miel picante */
+            transition: transform 0.1s ease;
+        }
+        .btn-primary:hover {
+            background-color: #e64a19;
+            transform: translateY(-1px);
+        }
+        .btn-primary:active {
+            transform: translateY(1px);
+        }
+        .input-style {
+            border-color: #ff5722 !important;
+        }
+        .barcode-input {
+            font-size: 1.5rem;
+            text-align: center;
+        }
+        .disabled-btn {
+            background-color: #cccccc !important;
+            cursor: not-allowed;
+        }
+    </style>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        'honey': '#F9C74F',
-                        'chili': '#E63946',
-                        'light-bg': '#F8F8F8', // Gris muy claro para minimalismo
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        'hot-honey': '#ff5722',
+                        'hot-honey-dark': '#e64a19',
                     }
                 }
             }
         }
     </script>
-    <style>
-        /* Estilos personalizados para la interfaz */
-        body {
-            /* Fondo blanco minimalista */
-            background-color: white; 
-            font-family: 'Inter', sans-serif;
-        }
-        .card {
-            /* Sombra más sutil para un look minimalista */
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
-            transition: transform 0.2s;
-            border: 1px solid #E5E7EB; /* Borde sutil */
-        }
-        .card:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
-        }
-        /* Botones de acento mantienen los colores de miel y chile */
-        .btn-honey {
-            background-color: #F9C74F;
-            color: #1F2937; /* Texto oscuro */
-            border: none;
-            transition: background-color 0.15s;
-        }
-        .btn-honey:hover {
-            background-color: #FBBF24;
-        }
-        .btn-chili {
-            background-color: #E63946;
-            color: white;
-            border: none;
-            transition: background-color 0.15s;
-        }
-        .btn-chili:hover {
-            background-color: #CF1B28;
-        }
-        /* Estilos de input minimalistas */
-        input[type=text], input[type=number], input[type=date] {
-            border: 1px solid #D1D5DB; 
-        }
-        input[type=text]:focus, input[type=number]:focus, input[type=date]:focus {
-            outline: none;
-            border-color: #F9C74F;
-            box-shadow: 0 0 0 1px #F9C74F;
-        }
-        
-        /* Oculta la flecha de los inputs numéricos */
-        input[type=number]::-webkit-outer-spin-button,
-        input[type=number]::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        input[type=number] {
-            -moz-appearance: textfield;
-        }
-
-    </style>
 </head>
-<!-- Fondo blanco y texto oscuro -->
-<body class="min-h-screen p-4 sm:p-6 bg-white text-gray-800">
+<body class="p-4 md:p-8">
 
-    <header class="text-center py-4 mb-6 border-b border-gray-200">
-        <!-- Título principal ahora en gris oscuro (text-gray-900) -->
-        <h1 class="text-3xl font-extrabold text-gray-900 flex items-center justify-center">
-            <!-- Icono sigue usando el color del texto (currentColor) -->
-            <svg class="w-8 h-8 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 12h-2v-4h2v4zm0-6H9V6h2v2z" clip-rule="evenodd" fill-rule="evenodd"></path></svg>
-            Control de Venta e Inventario
-        </h1>
-        <p class="text-sm text-gray-600 mt-1">Usuario ID: <span id="user-id">Cargando...</span></p>
-    </header>
-
-    <main id="app-container" class="max-w-4xl mx-auto">
-        <!-- Contenedor para el estado de la aplicación -->
-        <div id="loader" class="text-center p-8">
-            <!-- Spinner en gris oscuro (text-gray-900) -->
-            <svg class="animate-spin h-8 w-8 text-gray-900 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p class="mt-4 text-gray-700">Conectando a la base de datos...</p>
-        </div>
-
-        <!-- Contenedores de las tres Vistas: Configuración, Ventas y Reporte -->
-        <div id="setup-view" class="hidden"></div>
-        <div id="sales-view" class="hidden"></div>
-        <div id="report-view" class="hidden"></div> <!-- NUEVA VISTA DE REPORTE -->
-
-        <!-- Mensajes del sistema (Error, Éxito) -->
-        <div id="message-container" class="fixed bottom-4 right-4 z-50"></div>
-    </main>
-
-    <!-- Scripts de Firebase -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Establece el nivel de registro a Debug
-        setLogLevel('Debug');
-
-        // Variables Globales del Entorno (MANDATORIAS)
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'spicy-honey-app';
+    <div id="app" class="main-card bg-white shadow-xl rounded-xl p-4 md:p-6 space-y-6">
         
-        let firebaseConfig = {};
-        try {
-            // Intenta parsear la configuración. Usa {} si no está definida.
-            firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        } catch (e) {
-            console.error("Error al parsear __firebase_config:", e);
-        }
-        
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        <header class="text-center pb-4 border-b">
+            <h1 class="text-3xl font-bold text-hot-honey">🍯 POS Miel Picante 🌶️</h1>
+            <p class="text-gray-500">Control de Ventas e Inventario para Eventos</p>
+        </header>
 
-        let db;
-        let auth;
-        let userId = null;
-        let isAuthReady = false;
-        let activeEventId = null;
-        let currentEventData = null;
-        let salesCart = [];
+        <!-- Mensajes del Sistema (Éxito/Error) -->
+        <div id="messageBox" class="hidden p-3 rounded-lg text-sm" role="alert"></div>
 
-        const PRODUCT_LEVELS = ["Bajo", "Medio", "Alto"];
-
-        // --- Utilidades de Interfaz de Usuario ---
-        const $ = selector => document.querySelector(selector);
-        const $id = id => document.getElementById(id);
-
-        /** Muestra un mensaje temporal (éxito/error) en la esquina inferior. */
-        function showMessage(text, type = 'success') {
-            const container = $id('message-container');
-            const color = type === 'success' ? 'bg-green-500' : 'bg-red-500';
-
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `p-3 rounded-lg shadow-xl text-white font-semibold mb-2 ${color} transition transform duration-300`;
-            messageDiv.textContent = text;
-
-            container.appendChild(messageDiv);
-
-            setTimeout(() => {
-                messageDiv.classList.add('opacity-0', 'translate-x-full');
-                messageDiv.addEventListener('transitionend', () => messageDiv.remove());
-            }, 3000);
-        }
-
-        /** Formatea un número a moneda. */
-        const formatCurrency = (amount) => {
-            return new Intl.NumberFormat('es-SV', {
-                style: 'currency',
-                currency: 'USD',
-                minimumFractionDigits: 2,
-            }).format(amount);
-        };
-
-        // --- Funciones de Firestore ---
-
-        /** Obtiene la ruta de la colección privada del usuario */
-        const getUserCollectionPath = (collectionName) => {
-            return `/artifacts/${appId}/users/${userId}/${collectionName}`;
-        };
-
-        /**
-         * Helper function to switch between views
-         */
-        function switchView(viewName) {
-            $id('setup-view').classList.add('hidden');
-            $id('sales-view').classList.add('hidden');
-            $id('report-view').classList.add('hidden');
-
-            if (viewName === 'setup') {
-                $id('setup-view').classList.remove('hidden');
-            } else if (viewName === 'sales') {
-                $id('sales-view').classList.remove('hidden');
-                renderSalesView(); // Re-render if switching to sales
-            } else if (viewName === 'report') {
-                $id('report-view').classList.remove('hidden');
-                // Ensure report view is rendered if switched to
-                if (currentEventData) renderReportView();
-            }
-        }
-
-        /**
-         * Intenta cargar el evento activo para el día de hoy.
-         * Si no existe, prepara la vista de configuración.
-         */
-        async function loadActiveEvent() {
-            if (!isAuthReady || !userId) return;
-
-            const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-            const eventsColRef = collection(db, getUserCollectionPath('events'));
-            // Buscamos un evento activo cuya fecha de inicio sea hoy.
-            const q = query(eventsColRef, where("startDate", "==", today), where("status", "==", "Active"));
-
-            try {
-                const querySnapshot = await getDocs(q);
-
-                if (querySnapshot.empty) {
-                    activeEventId = null;
-                    currentEventData = null;
-                    switchView('setup');
-                    renderSetupView(today);
-                    showMessage("No hay evento activo para hoy. Por favor, configura el inventario.", 'info');
-                } else {
-                    const docSnap = querySnapshot.docs[0];
-                    activeEventId = docSnap.id;
-                    currentEventData = docSnap.data();
-
-                    // Establece el listener en tiempo real
-                    setupRealtimeListener(activeEventId);
-                }
-            } catch (error) {
-                console.error("Error cargando evento activo:", error);
-                showMessage("Error al cargar el evento: " + error.message, 'error');
-                switchView('setup'); // Fallback a configuración
-                renderSetupView(today); 
-            }
-        }
-
-        /** Configura el listener en tiempo real para el evento activo. */
-        function setupRealtimeListener(eventId) {
-            const eventDocRef = doc(db, getUserCollectionPath('events'), eventId);
-
-            onSnapshot(eventDocRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    currentEventData = docSnap.data();
-                    
-                    // Comprueba qué vista está activa y renderiza solo esa
-                    if (!$id('sales-view').classList.contains('hidden')) {
-                        renderSalesView(); // Redibuja la vista de ventas
-                    } else if (!$id('report-view').classList.contains('hidden')) {
-                        renderReportView(); // Redibuja la vista de reportes
-                    } else {
-                         // Si ninguna vista está activa (como al inicio), por defecto a ventas
-                         switchView('sales');
-                    }
-                    
-                    showMessage(`Inventario actualizado en tiempo real.`, 'success');
-                } else {
-                    showMessage("El evento activo ha sido eliminado. Redirigiendo a configuración.", 'error');
-                    loadActiveEvent(); // Recarga para ir a configuración
-                }
-            }, (error) => {
-                console.error("Error en listener de Firestore:", error);
-                showMessage("Error de conexión en tiempo real: " + error.message, 'error');
-            });
-
-            // Oculta el loader
-            $id('loader').classList.add('hidden');
-        }
-
-        // --- Vistas y Renderizado ---
-
-        /** Renderiza la Vista de Configuración del Evento (Requisito 1 & 2) */
-        function renderSetupView(defaultDate) {
-            // El cambio de vista ahora se hace con switchView
-            const html = `
-                <!-- Tarjeta principal minimalista (Fondo blanco, borde y sombra sutil) -->
-                <div class="card bg-white p-6 rounded-xl"> 
-                    <!-- Título en gris oscuro -->
-                    <h2 class="text-xl font-bold mb-4 text-gray-900">Configuración de Nuevo Evento</h2>
-                    
-                    <div class="grid grid-cols-2 gap-4 mb-4">
-                        <label class="block">
-                            <span class="text-sm text-gray-600">Fecha de Inicio</span>
-                            <input type="date" id="event-start-date" value="${defaultDate}" class="w-full p-3 mt-1 rounded-lg bg-white text-gray-800 focus:ring-honey focus:border-honey" required>
-                        </label>
-                        <label class="block">
-                            <span class="text-sm text-gray-600">Fecha de Fin</span>
-                            <input type="date" id="event-end-date" value="${defaultDate}" class="w-full p-3 mt-1 rounded-lg bg-white text-gray-800 focus:ring-honey focus:border-honey" required>
-                        </label>
+        <!-- Vista de Configuración Inicial (SETUP) -->
+        <section id="setupView" class="space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700">1. Configuración del Evento</h2>
+            <p class="text-sm text-gray-500">Ingresa el inventario inicial, el precio y el código SKU/Barcode para cada nivel.</p>
+            
+            <div id="setupForm" class="space-y-4">
+                <!-- Productos a configurar -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-nivel="Bajo" data-sku="Miel01">
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-medium text-gray-700">Nivel Bajo</label>
+                        <input type="text" class="sku-input mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-100" value="Miel01" disabled>
                     </div>
-
-                    <div id="product-forms" class="space-y-4">
-                        ${PRODUCT_LEVELS.map(level => `
-                            <!-- Tarjetas de producto en gris muy claro -->
-                            <div class="p-4 bg-gray-50 rounded-lg border border-gray-200"> 
-                                <!-- Subtítulo en gris oscuro -->
-                                <h3 class="font-semibold text-lg text-gray-900 mb-2">Nivel Picante: ${level}</h3>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <label class="block">
-                                        <span class="text-sm text-gray-600">Precio ($)</span>
-                                        <input type="number" step="0.01" min="0.01" id="price-${level}" placeholder="Ej: 15.00" class="w-full mt-1 p-2 rounded-lg bg-white text-gray-800" required>
-                                    </label>
-                                    <label class="block">
-                                        <span class="text-sm text-gray-600">Inventario Inicial</span>
-                                        <input type="number" min="1" id="inv-${level}" placeholder="Ej: 50" class="w-full mt-1 p-2 rounded-lg bg-white text-gray-800" required>
-                                    </label>
-                                </div>
-                                <label class="block mt-4">
-                                    <span class="text-sm text-gray-600">Código de Barras (EAN/UPC)</span>
-                                    <input type="text" id="barcode-${level}" placeholder="Ej: 1000${level.slice(0,1).toUpperCase()}" class="w-full mt-1 p-2 rounded-lg bg-white text-gray-800" required>
-                                </label>
-                            </div>
-                        `).join('')}
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Cant. Inicial</label>
+                        <input type="number" min="0" value="50" class="qty-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="50">
                     </div>
-                    <button id="save-event-btn" class="btn-chili w-full mt-6 py-3 rounded-lg font-bold">
-                        <svg class="animate-spin h-5 w-5 mr-3 hidden" id="setup-spinner" viewBox="0 0 24 24"></svg>
-                        Iniciar Evento de Venta
-                    </button>
-                </div>
-            `;
-            $id('setup-view').innerHTML = html;
-            $id('save-event-btn').addEventListener('click', saveEventConfiguration);
-        }
-
-        /** Guarda la configuración del evento en Firestore. */
-        async function saveEventConfiguration() {
-            const btn = $id('save-event-btn');
-            const spinner = $id('setup-spinner');
-            btn.disabled = true;
-            spinner.classList.remove('hidden');
-            btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-3 mx-auto" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Guardando...`;
-
-            const startDate = $id('event-start-date').value;
-            const endDate = $id('event-end-date').value;
-
-            if (!startDate || !endDate) {
-                showMessage("Debe seleccionar las fechas de inicio y fin.", 'error');
-                btn.disabled = false;
-                btn.innerHTML = 'Iniciar Evento de Venta';
-                return;
-            }
-
-            if (new Date(startDate) > new Date(endDate)) {
-                showMessage("La fecha de fin no puede ser anterior a la fecha de inicio.", 'error');
-                btn.disabled = false;
-                btn.innerHTML = 'Iniciar Evento de Venta';
-                return;
-            }
-
-            const eventData = {
-                eventName: `Venta en Mercado (${startDate} a ${endDate})`,
-                startDate: startDate, // Guardamos la fecha de inicio
-                endDate: endDate,     // Guardamos la fecha de fin
-                dateCreated: new Date(),
-                userId: userId,
-                status: "Active",
-                products: {},
-                salesLog: []
-            };
-
-            let barcodes = new Set();
-            let allValid = true;
-
-            PRODUCT_LEVELS.forEach(level => {
-                const price = parseFloat($id(`price-${level}`).value);
-                const inventory = parseInt($id(`inv-${level}`).value, 10);
-                const barcode = $id(`barcode-${level}`).value.trim();
-
-                if (isNaN(price) || price <= 0 || isNaN(inventory) || inventory < 1 || !barcode) {
-                    allValid = false;
-                    return;
-                }
-
-                if (barcodes.has(barcode)) {
-                    allValid = false;
-                    showMessage("Los códigos de barras deben ser únicos.", 'error');
-                    return;
-                }
-                barcodes.add(barcode);
-
-                eventData.products[level] = {
-                    price: price,
-                    startingInventory: inventory,
-                    currentInventory: inventory, // Inventario inicial y actual son iguales
-                    barcode: barcode
-                };
-            });
-
-            if (!allValid) {
-                showMessage("Por favor, complete todos los campos de precios, inventario y códigos de barras correctamente.", 'error');
-                btn.disabled = false;
-                btn.innerHTML = 'Iniciar Evento de Venta';
-                return;
-            }
-
-            try {
-                // Primero, desactivar cualquier evento activo anterior para hoy.
-                const eventsColRef = collection(db, getUserCollectionPath('events'));
-                // La búsqueda de un evento activo se basa en la fecha de inicio de hoy
-                const q = query(eventsColRef, where("startDate", "==", startDate), where("status", "==", "Active"));
-                const activeEventsSnapshot = await getDocs(q);
-                activeEventsSnapshot.forEach(async (doc) => {
-                    await updateDoc(doc.ref, { status: "Archived" });
-                });
-
-                // Luego, crea el nuevo documento de evento.
-                const newEventRef = doc(eventsColRef);
-                await setDoc(newEventRef, eventData);
-                activeEventId = newEventRef.id;
-
-                showMessage("✅ Evento iniciado y configuración guardada con éxito!", 'success');
-                // Esto desencadenará el listener y la renderización de la vista de ventas
-                setupRealtimeListener(activeEventId);
-                switchView('sales'); // Asegura la transición a la vista de ventas
-            } catch (error) {
-                console.error("Error al guardar la configuración:", error);
-                showMessage("❌ Error al guardar: " + error.message, 'error');
-            } finally {
-                btn.disabled = false;
-                spinner.classList.add('hidden');
-            }
-        }
-
-        /** Renderiza la Vista de Ventas (Requisito 3) */
-        function renderSalesView() {
-            if (!currentEventData) return;
-
-            const inventoryHtml = PRODUCT_LEVELS.map(level => {
-                const p = currentEventData.products[level] || {};
-                // El inventario saludable ahora usa text-gray-700
-                const inventoryClass = p.currentInventory < p.startingInventory * 0.2 ? 'text-chili font-extrabold' : 'text-gray-700'; 
-                return `
-                    <!-- Tarjeta de inventario en gris muy claro -->
-                    <div class="p-3 bg-gray-50 rounded-lg flex justify-between items-center border border-gray-200">
-                        <div>
-                            <p class="font-semibold text-gray-800">${level} Picante</p>
-                            <p class="text-xs text-gray-600">Precio: ${formatCurrency(p.price || 0)}</p>
-                            <p class="text-xs text-gray-600">Cód: ${p.barcode || 'N/A'}</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-sm text-gray-600">Inv. Disp:</p>
-                            <!-- Color del número de inventario -->
-                            <p class="text-2xl ${inventoryClass}">${p.currentInventory || 0}</p>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            const cartTotal = salesCart.reduce((sum, item) => sum + item.price, 0);
-            const cartHtml = salesCart.map((item, index) => `
-                <li class="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
-                    <span class="text-gray-800">${item.level} Picante (${formatCurrency(item.price)})</span>
-                    <button data-index="${index}" class="remove-from-cart text-sm text-chili hover:text-red-400 font-semibold transition">
-                        Eliminar
-                    </button>
-                </li>
-            `).join('');
-
-            const viewHtml = `
-                <!-- Título del evento y botón de Reporte -->
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold text-gray-900">${currentEventData.eventName}</h2>
-                    <button id="switch-to-report" class="flex items-center text-sm btn-chili py-2 px-4 rounded-lg font-semibold">
-                        <!-- Icono de reporte/gráfico -->
-                        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m-6 0h6"></path></svg>
-                        Ver Reporte
-                    </button>
-                </div>
-
-                <!-- Sección de Inventario -->
-                <div class="grid sm:grid-cols-3 gap-4 mb-8">
-                    ${inventoryHtml}
-                </div>
-
-                <!-- Sección de Escaneo (Fondo blanco) -->
-                <div class="card bg-white p-6 rounded-xl mb-8">
-                    <!-- Título de sección en gris oscuro -->
-                    <h3 class="text-xl font-bold mb-3 text-gray-900">Escanear Producto</h3>
-                    <p class="text-sm text-gray-600 mb-4">Escanea el código de barras o ingrésalo manualmente y presiona Enter.</p>
-                    <input type="text" id="barcode-input" placeholder="Escanear Código Aquí..." autofocus
-                           class="w-full p-4 text-xl rounded-lg bg-white border-2 border-gray-300 text-gray-800 focus:ring-honey focus:border-honey transition">
-                </div>
-
-                <!-- Carrito de Compras (Fondo blanco) -->
-                <div class="card bg-white p-6 rounded-xl">
-                    <!-- Título de carrito en gris oscuro -->
-                    <h3 class="text-xl font-bold mb-4 text-gray-900 flex justify-between items-center">
-                        Carrito Actual
-                        <span class="text-2xl text-chili font-extrabold">${formatCurrency(cartTotal)}</span>
-                    </h3>
-                    <ul id="cart-list" class="mb-4 max-h-60 overflow-y-auto pr-2">
-                        ${salesCart.length > 0 ? cartHtml : '<li class="text-gray-600 italic">No hay productos en el carrito.</li>'}
-                    </ul>
-
-                    <button id="checkout-btn" class="btn-honey w-full py-3 rounded-lg font-bold disabled:opacity-50" ${salesCart.length === 0 ? 'disabled' : ''}>
-                        <svg class="animate-spin h-5 w-5 mr-3 hidden" id="checkout-spinner" viewBox="0 0 24 24"></svg>
-                        Confirmar Venta (${formatCurrency(cartTotal)})
-                    </button>
-                </div>
-            `;
-            $id('sales-view').innerHTML = viewHtml;
-
-            // Añadir Listeners
-            $id('barcode-input').addEventListener('keypress', handleBarcodeScan);
-            $id('checkout-btn').addEventListener('click', processCheckout);
-            $id('cart-list').querySelectorAll('.remove-from-cart').forEach(btn => {
-                btn.addEventListener('click', removeFromCart);
-            });
-            $id('switch-to-report').addEventListener('click', () => switchView('report'));
-        }
-
-        /** Renderiza la Vista de Reporte de Ventas (NUEVA FUNCIÓN) */
-        function renderReportView() {
-            if (!currentEventData) {
-                switchView('setup'); // Fallback if no data
-                return;
-            }
-
-            const salesLog = currentEventData.salesLog || [];
-            let totalRevenue = 0;
-            let totalUnitsSold = 0;
-            const unitsByLevel = {}; // { 'Bajo': 10, 'Medio': 5, ... }
-
-            // 1. Cálculos de Ventas
-            salesLog.forEach(sale => {
-                totalRevenue += sale.total;
-                for (const level in sale.items) {
-                    const qty = sale.items[level];
-                    totalUnitsSold += qty;
-                    unitsByLevel[level] = (unitsByLevel[level] || 0) + qty;
-                }
-            });
-
-            // 2. Resumen de Inventario
-            const inventorySummaryHtml = PRODUCT_LEVELS.map(level => {
-                const p = currentEventData.products[level] || {};
-                const starting = p.startingInventory || 0;
-                const current = p.currentInventory || 0;
-                const sold = starting - current;
-                // Previene división por cero
-                const remainingPercentage = starting > 0 ? ((current / starting) * 100).toFixed(0) : 0; 
-                // Color de la barra de progreso
-                const progressColor = current > starting * 0.2 ? 'bg-green-500' : 'bg-chili';
-
-                return `
-                    <div class="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
-                        <h4 class="font-bold text-lg text-gray-800">${level} Picante}</h4>
-                        <div class="mt-2 text-sm text-gray-600">
-                            <p>Inicial: <span class="font-semibold text-gray-900">${starting}</span></p>
-                            <p>Vendidas: <span class="font-semibold text-chili">${sold}</span></p>
-                            <p>Restantes: <span class="font-semibold text-gray-900">${current}</span></p>
-                        </div>
-                        <div class="mt-3">
-                            <div class="h-2 rounded-full bg-gray-200">
-                                <div class="h-2 rounded-full ${progressColor}" style="width: ${remainingPercentage}%;"></div>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-1">${remainingPercentage}% Restante</p>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            // 3. Resumen de Transacciones (Ordenado de la más reciente a la más antigua)
-            const transactionsHtml = salesLog.length > 0 ? salesLog.slice().reverse().map((sale, index) => {
-                // Firestore Timestamp object needs to be converted to Date
-                const saleTime = sale.time && sale.time.seconds ? new Date(sale.time.seconds * 1000) : new Date();
-                const saleDate = saleTime.toLocaleString('es-SV', {
-                    year: 'numeric', month: 'short', day: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                });
-                const itemsList = Object.keys(sale.items).map(level => `${sale.items[level]}x ${level}`).join(', ');
-
-                return `
-                    <div class="flex justify-between items-center py-3 border-b border-gray-100">
-                        <div>
-                            <!-- El índice se calcula al revés para que la más reciente sea Venta #1 -->
-                            <p class="font-semibold text-gray-800">Venta #${salesLog.length - index}</p> 
-                            <p class="text-xs text-gray-500">${itemsList}</p>
-                            <p class="text-xs text-gray-500">${saleDate}</p>
-                        </div>
-                        <span class="text-lg font-extrabold text-chili">${formatCurrency(sale.total)}</span>
-                    </div>
-                `;
-            }).join('') : '<p class="text-gray-600 italic p-4 text-center">Aún no hay ventas registradas en este evento.</p>';
-
-
-            const html = `
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold text-gray-900">Reporte de Evento: ${currentEventData.eventName}</h2>
-                    <button id="switch-to-sales" class="flex items-center text-sm btn-honey py-2 px-4 rounded-lg font-semibold">
-                        <!-- Icono de carrito de compras -->
-                        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                        Volver a Ventas
-                    </button>
-                </div>
-
-                <!-- Resumen Financiero -->
-                <div class="grid grid-cols-3 gap-4 mb-8">
-                    <div class="card bg-gray-50 p-4 rounded-xl text-center">
-                        <p class="text-sm font-medium text-gray-600">Ingreso Total</p>
-                        <p class="text-3xl font-extrabold text-green-600 mt-1">${formatCurrency(totalRevenue)}</p>
-                    </div>
-                    <div class="card bg-gray-50 p-4 rounded-xl text-center">
-                        <p class="text-sm font-medium text-gray-600">Unidades Vendidas</p>
-                        <p class="text-3xl font-extrabold text-chili mt-1">${totalUnitsSold}</p>
-                    </div>
-                    <div class="card bg-gray-50 p-4 rounded-xl text-center">
-                        <p class="text-sm font-medium text-gray-600">Transacciones</p>
-                        <p class="text-3xl font-extrabold text-gray-800 mt-1">${salesLog.length}</p>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Precio ($)</label>
+                        <input type="number" step="0.01" min="0" value="12.00" class="price-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="12.00">
                     </div>
                 </div>
 
-                <!-- Detalle de Inventario -->
-                <div class="card bg-white p-6 rounded-xl mb-8">
-                    <h3 class="text-xl font-bold mb-4 text-gray-900">Estado del Inventario</h3>
-                    <div class="grid sm:grid-cols-3 gap-4">
-                        ${inventorySummaryHtml}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-nivel="Medio" data-sku="Miel02">
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-medium text-gray-700">Nivel Medio</label>
+                        <input type="text" class="sku-input mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-100" value="Miel02" disabled>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Cant. Inicial</label>
+                        <input type="number" min="0" value="75" class="qty-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="75">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Precio ($)</label>
+                        <input type="number" step="0.01" min="0" value="13.50" class="price-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="13.50">
                     </div>
                 </div>
 
-                <!-- Log de Transacciones -->
-                <div class="card bg-white p-6 rounded-xl">
-                    <h3 class="text-xl font-bold mb-4 text-gray-900">Registro de Transacciones (Más Recientes)</h3>
-                    <div class="max-h-96 overflow-y-auto">
-                        ${transactionsHtml}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-nivel="Alto" data-sku="Miel03">
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-medium text-gray-700">Nivel Alto</label>
+                        <input type="text" class="sku-input mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-100" value="Miel03" disabled>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Cant. Inicial</label>
+                        <input type="number" min="0" value="25" class="qty-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="25">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Precio ($)</label>
+                        <input type="number" step="0.01" min="0" value="15.00" class="price-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="15.00">
                     </div>
                 </div>
-            `;
-            $id('report-view').innerHTML = html;
-            $id('switch-to-sales').addEventListener('click', () => switchView('sales'));
-        }
-
-        // --- Lógica de Venta (Requisito 3) ---
-
-        /** Maneja el evento de escaneo de código de barras. */
-        function handleBarcodeScan(event) {
-            if (event.key === 'Enter') {
-                const barcode = $id('barcode-input').value.trim();
-                $id('barcode-input').value = ''; // Limpiar input para el próximo escaneo
-                event.preventDefault();
-
-                if (!barcode) return;
-
-                addProductToCart(barcode);
-            }
-        }
-
-        /** Agrega un producto al carrito por código de barras. */
-        function addProductToCart(barcode) {
-            const products = currentEventData.products;
-            let foundProduct = null;
-            let productLevel = null;
-
-            for (const level in products) {
-                if (products[level].barcode === barcode) {
-                    foundProduct = products[level];
-                    productLevel = level;
-                    break;
-                }
-            }
-
-            if (!foundProduct) {
-                showMessage(`Código de barras ${barcode} no encontrado.`, 'error');
-                return;
-            }
-
-            if (foundProduct.currentInventory <= 0) {
-                 showMessage(`¡Inventario agotado para ${productLevel} Picante!`, 'error');
-                 return;
-            }
-
-            salesCart.push({
-                level: productLevel,
-                price: foundProduct.price,
-                barcode: barcode
-            });
-            renderSalesView();
-            showMessage(`${productLevel} Picante agregado al carrito.`, 'success');
-        }
-
-        /** Elimina un producto del carrito. */
-        function removeFromCart(event) {
-            const index = parseInt(event.target.dataset.index, 10);
-            if (index >= 0 && index < salesCart.length) {
-                salesCart.splice(index, 1);
-                renderSalesView();
-                showMessage('Producto eliminado del carrito.', 'info');
-            }
-        }
-
-        /** Procesa la venta y actualiza el inventario en Firestore. */
-        async function processCheckout() {
-            if (salesCart.length === 0 || !activeEventId || !currentEventData) return;
-
-            const btn = $id('checkout-btn');
-            const spinner = $id('checkout-spinner');
-            btn.disabled = true;
-            spinner.classList.remove('hidden');
-
-            const eventDocRef = doc(db, getUserCollectionPath('events'), activeEventId);
-            const totalSale = salesCart.reduce((sum, item) => sum + item.price, 0);
-
-            // Agrupa los artículos del carrito para el débito
-            const itemsSold = salesCart.reduce((acc, item) => {
-                acc[item.level] = (acc[item.level] || 0) + 1;
-                return acc;
-            }, {});
-
-            try {
-                // Usar una Transacción para asegurar la integridad de la base de datos
-                await runTransaction(db, async (transaction) => {
-                    const eventDoc = await transaction.get(eventDocRef);
-                    if (!eventDoc.exists()) {
-                        throw "Documento del evento no existe.";
-                    }
-
-                    const newProducts = { ...eventDoc.data().products };
-                    const salesLog = [...eventDoc.data().salesLog || []];
-
-                    // 1. Verificar inventario y debitar
-                    for (const level in itemsSold) {
-                        const qtySold = itemsSold[level];
-                        if (!newProducts[level] || newProducts[level].currentInventory < qtySold) {
-                            throw `Inventario insuficiente para ${level}.`;
-                        }
-                        newProducts[level].currentInventory -= qtySold;
-                    }
-
-                    // 2. Registrar la venta en el log
-                    salesLog.push({
-                        time: new Date(),
-                        total: totalSale,
-                        items: itemsSold
-                    });
-
-                    // 3. Actualizar el documento del evento
-                    transaction.update(eventDocRef, {
-                        products: newProducts,
-                        salesLog: salesLog
-                    });
-                });
-
-                // Transacción exitosa
-                showMessage(`🎉 Venta de ${formatCurrency(totalSale)} confirmada! Inventario actualizado.`, 'success');
-                salesCart = []; // Limpiar carrito
-                // El listener en tiempo real se encargará de llamar a renderSalesView/renderReportView
-            } catch (error) {
-                console.error("Error al procesar la venta:", error);
-                if (typeof error === 'string') {
-                    showMessage(`❌ Error en la venta: ${error}`, 'error');
-                } else {
-                    showMessage(`❌ Error en la venta: ${error.message}`, 'error');
-                }
-            } finally {
-                btn.disabled = false;
-                spinner.classList.add('hidden');
-            }
-        }
-
-        // --- Inicialización de Firebase y Auth ---
-
-        async function initFirebase() {
-            try {
-                // VERIFICACIÓN AÑADIDA: Asegura que la configuración no esté vacía
-                if (!firebaseConfig || Object.keys(firebaseConfig).length === 0) {
-                    throw new Error("La configuración de la base de datos (projectId) está ausente o vacía.");
-                }
                 
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
+                <button onclick="handleSetup()" id="setupButton" class="w-full btn-primary text-white font-semibold py-3 rounded-lg shadow-md transition duration-200">
+                    Guardar Inventario e Iniciar Venta
+                </button>
+            </div>
+        </section>
 
-                // Esperar a que el estado de autenticación cambie (se complete el inicio de sesión)
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                    } else if (initialAuthToken) {
-                        // Usar token personalizado
-                        await signInWithCustomToken(auth, initialAuthToken);
-                        userId = auth.currentUser.uid;
-                    } else {
-                        // Usar inicio de sesión anónimo como fallback
-                        const anonUser = await signInAnonymously(auth);
-                        userId = anonUser.user.uid;
-                    }
+        <!-- Vista de Venta (SALE) -->
+        <section id="saleView" class="hidden space-y-6">
+            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2">2. Registro de Venta</h2>
+            
+            <!-- Entrada de Código de Barras / SKU -->
+            <div class="space-y-2">
+                <label for="barcodeInput" class="block text-lg font-medium text-gray-700">Escanear Código de Barras / SKU</label>
+                <input type="text" id="barcodeInput" class="barcode-input w-full rounded-lg border-2 input-style shadow-lg p-3 focus:outline-none focus:ring-2 focus:ring-hot-honey" 
+                       placeholder="Escanea aquí o ingresa SKU (Miel01, Miel02, Miel03)" 
+                       onkeydown="if(event.key === 'Enter') addItemToCart(this.value); this.value='';" autofocus>
+                <p class="text-xs text-gray-500 pt-1">Presiona ENTER o usa un escáner real. Los SKUs de ejemplo son: Miel01, Miel02, Miel03.</p>
+                <!-- Opcional: Botón de escaneo con cámara (requeriría una librería como QuaggaJS) -->
+                <!-- <button onclick="startCameraScanner()" class="w-full mt-2 bg-gray-200 text-gray-700 py-2 rounded-lg text-sm">Usar Cámara para Escanear (Requiere Librería)</button> -->
+            </div>
 
-                    // Una vez que el userId esté disponible
-                    $id('user-id').textContent = userId;
-                    isAuthReady = true;
-                    loadActiveEvent();
-                });
+            <!-- Carrito de Compras -->
+            <div class="border rounded-lg shadow-sm p-3">
+                <h3 class="text-lg font-semibold mb-2 flex justify-between items-center">
+                    Carrito de Compras
+                    <span id="cartCount" class="bg-hot-honey text-white text-xs font-bold px-2 py-1 rounded-full">0 productos</span>
+                </h3>
+                <div id="cartItems" class="space-y-2 max-h-48 overflow-y-auto">
+                    <!-- Los artículos se añadirán aquí -->
+                    <p id="emptyCartMessage" class="text-gray-500 text-center py-4">El carrito está vacío. Escanea un producto.</p>
+                </div>
+                <div class="border-t mt-4 pt-4 flex justify-between items-center">
+                    <span class="text-xl font-bold text-gray-800">TOTAL:</span>
+                    <span id="cartTotal" class="text-3xl font-extrabold text-hot-honey">$0.00</span>
+                </div>
+            </div>
 
-            } catch (error) {
-                console.error("Error en la inicialización de Firebase:", error);
-                // Muestra un mensaje de error más claro al usuario
-                $id('loader').innerHTML = `<p class="text-chili font-bold">Error Fatal: No se pudo conectar a la base de datos. ${error.message}</p>`;
-            }
-        }
+            <!-- Inventario y Botón de Venta -->
+            <div class="space-y-4">
+                <h3 class="text-lg font-semibold text-gray-700">Inventario Actual</h3>
+                <div id="inventoryDisplay" class="space-y-2">
+                    <!-- El inventario se cargará aquí -->
+                    <p class="text-center text-gray-500">Cargando inventario...</p>
+                </div>
 
-        // Inicia la aplicación al cargar la ventana
-        window.onload = initFirebase;
-    </script>
-</body>
-</html>
+                <button onclick="handleSale()" id="saleButton" class="w-full btn-primary text-white font-semibold py-3 rounded-lg shadow-md transition duration-200 disabled:opacity-50" disabled>
+                    Finalizar Venta
+                </button>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        // ¡CRÍTICO! Este es el URL de la aplicación web de Apps Script (termina en /exec)
+        // URL de ejecución actualizado después del redespliegue.
+        const apiUrl = 'https://script.google.com/macros/s/AKfycbxy1UmeTQKKRyCO_Z4SieVb4rcvQZDw9hV0lWIKPsCWDPeJ1BRU37SheKkgZsjuVOVHzQ/exec'; 
+
+        let currentInventory = [];
+        let shoppingCart = {}; // {sku: {nivel, precio, cantidad}}
+        let isSetupComplete = false;
+        
+        // --- UTILIDADES ---
+
+        /** Muestra un mensaje al usuario. */
+        function showMessage(type, content) {
+            const messageBox = document.getElementById('messageBox');
+            messageBox.textContent = content;
+            messageBox.className = 'p-3 rounded-lg text-sm transition-all duration-300';
+            messageBox.classList.remove('hidden');
+            
+            if (type === 'success') {
+                messageBox.classList.add('bg-green-100', 'text-green-800');
+            } else if (type === 'error') {
+                messageBox.classList.add('bg-red-100', 'text-red-800');
+            } else {
+                messageBox.classList.add('bg-blue-100', 'text-blue-800');
