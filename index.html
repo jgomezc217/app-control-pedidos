@@ -172,7 +172,7 @@
 
     <script>
         // ¡CRÍTICO! Este es el URL de la aplicación web de Apps Script (termina en /exec)
-        const apiUrl = 'https://script.google.com/macros/u/1/s/AKfycby73NmZ8qEwoKsm5UV3qdmhirai5f_ec6i7sT9nbwEeBF6G5528iQipOP0BvdgvzCEPmw/exec'; 
+        const apiUrl = 'https://script.google.com/macros/s/AKfycbx9tuTaUV3crfcFMLpj8aZFYrz6cQA1BwoxSSROqiDsMoDvOsesGWWegFO4JzydMQo3wA/exec'; 
 
         let currentInventory = [];
         let shoppingCart = {}; // {sku: {nivel, precio, cantidad}}
@@ -308,6 +308,7 @@
 
             display.innerHTML = '';
             currentInventory.forEach(item => {
+                // CORRECCIÓN: Se reemplazó la coma por el espacio para concatenar clases CSS
                 const stockColor = item.stock > 10 ? 'bg-green-100 text-green-800' : 
                                    item.stock > 0 ? 'bg-yellow-100 text-yellow-800' : 
                                    'bg-red-100 text-red-800';
