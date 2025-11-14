@@ -88,7 +88,9 @@
         <!-- ============================================== -->
         <section id="startView" class="space-y-6">
             <h2 class="text-xl font-semibold text-gray-700">1. Seleccionar Evento Activo</h2>
-            <div class="space-y-4 p-4 border rounded-lg shadow-sm">
+            
+            <!-- Selector de Eventos -->
+            <div class="space-y-4 p-4 border rounded-lg shadow-sm bg-gray-50">
                 <label for="eventSelector" class="block text-lg font-medium text-gray-700">Eventos Disponibles:</label>
                 <select id="eventSelector" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 bg-white border focus:border-hot-honey focus:ring-hot-honey">
                     <option value="" disabled selected>Cargando eventos...</option>
@@ -97,7 +99,19 @@
                     Iniciar Evento y Configuración
                 </button>
             </div>
-            <p class="text-sm text-gray-500 text-center">Recuerda añadir los nombres de tus eventos en la hoja 'EVENTOS' de Google Sheets.</p>
+
+            <!-- Creador de Eventos -->
+            <div class="space-y-4 p-4 border rounded-lg shadow-sm border-dashed border-gray-300">
+                <h3 class="text-lg font-semibold text-gray-700">O Crear Nuevo Evento</h3>
+                <div class="flex space-x-2">
+                    <input type="text" id="newEventName" class="flex-1 rounded-md border-2 input-style shadow-sm p-3 focus:outline-none" 
+                           placeholder="Ej: Mercado de Navidad 2026">
+                    <button onclick="handleCreateEvent()" id="createEventButton" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-200">
+                        Crear
+                    </button>
+                </div>
+            </div>
+            <p class="text-sm text-gray-500 text-center">Una vez creado, el nuevo evento aparecerá en la lista superior.</p>
         </section>
 
 
@@ -435,9 +449,50 @@
         }
         
         // --- GESTIÓN DE EVENTOS Y DATOS ---
+        
+        /** Maneja la creación de un nuevo evento. */
+        async function handleCreateEvent() {
+            const input = document.getElementById('newEventName');
+            const eventName = input.value.trim();
+            const button = document.getElementById('createEventButton');
+
+            if (eventName === '') {
+                showMessage('error', 'Por favor, introduce un nombre para el nuevo evento.');
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = 'Creando...';
+
+            const payload = {
+                operation: 'CREATE_EVENT',
+                eventName: eventName
+            };
+
+            try {
+                const result = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' }, 
+                    body: JSON.stringify(payload)
+                });
+                
+                showMessage('success', result.message);
+                input.value = ''; // Limpiar campo
+                
+                // Recargar lista de eventos y seleccionar el recién creado
+                await loadEvents(eventName); 
+
+            } catch (error) {
+                showMessage('error', error.message);
+                console.error("Error en handleCreateEvent:", error);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Crear';
+            }
+        }
 
         /** Carga la lista de eventos desde Apps Script. */
-        async function loadEvents() {
+        async function loadEvents(selectEventName = null) {
             const selector = document.getElementById('eventSelector');
             const button = document.getElementById('startButton');
             selector.innerHTML = '<option value="" disabled selected>Cargando eventos...</option>';
@@ -451,16 +506,23 @@
                 selector.innerHTML = '';
                 if (events.length === 0) {
                     selector.innerHTML = '<option value="" disabled selected>No hay eventos creados en Sheets</option>';
-                    showMessage('error', "No hay eventos en la hoja 'EVENTOS'. Por favor, añade nombres en la Columna A.");
+                    button.disabled = true;
                 } else {
                     selector.innerHTML = '<option value="" disabled selected>-- Selecciona un Evento --</option>';
                     events.forEach(event => {
                         const option = document.createElement('option');
                         option.value = event;
                         option.textContent = event;
+                        if (event === selectEventName) {
+                            option.selected = true;
+                            button.disabled = false;
+                        }
                         selector.appendChild(option);
                     });
-                    button.disabled = false;
+                    // Si se seleccionó uno, habilitar el botón. Si no, esperar a la selección manual.
+                    if (!selectEventName) {
+                        button.disabled = !selector.value;
+                    }
                     selector.onchange = () => button.disabled = !selector.value;
                 }
             } catch (error) {
