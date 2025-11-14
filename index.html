@@ -82,11 +82,29 @@
 
         <!-- Mensajes del Sistema (Éxito/Error) -->
         <div id="messageBox" class="hidden p-3 rounded-lg text-sm" role="alert"></div>
+        
+        <!-- ============================================== -->
+        <!-- NUEVA VISTA DE INICIO (START) -->
+        <!-- ============================================== -->
+        <section id="startView" class="space-y-6">
+            <h2 class="text-xl font-semibold text-gray-700">1. Seleccionar Evento Activo</h2>
+            <div class="space-y-4 p-4 border rounded-lg shadow-sm">
+                <label for="eventSelector" class="block text-lg font-medium text-gray-700">Eventos Disponibles:</label>
+                <select id="eventSelector" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 bg-white border focus:border-hot-honey focus:ring-hot-honey">
+                    <option value="" disabled selected>Cargando eventos...</option>
+                </select>
+                <button onclick="selectEvent()" id="startButton" class="w-full btn-primary text-white font-semibold py-3 rounded-lg shadow-md transition duration-200 disabled:opacity-50" disabled>
+                    Iniciar Evento y Configuración
+                </button>
+            </div>
+            <p class="text-sm text-gray-500 text-center">Recuerda añadir los nombres de tus eventos en la hoja 'EVENTOS' de Google Sheets.</p>
+        </section>
+
 
         <!-- Vista de Configuración Inicial (SETUP) -->
-        <section id="setupView" class="space-y-4">
-            <h2 class="text-xl font-semibold text-gray-700">1. Configuración del Evento</h2>
-            <p class="text-sm text-gray-500">Ingresa el inventario inicial, el precio y el código SKU/Barcode para cada nivel.</p>
+        <section id="setupView" class="hidden space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700">2. Configuración de <span id="activeEventName" class="text-hot-honey font-bold"></span></h2>
+            <p class="text-sm text-gray-500">Ingresa el inventario inicial, el precio y el código SKU/Barcode para este evento.</p>
             
             <div id="setupForm" class="space-y-4">
                 <!-- Productos a configurar -->
@@ -143,8 +161,13 @@
 
         <!-- Vista de Venta (SALE) -->
         <section id="saleView" class="hidden space-y-6">
-            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2">2. Registro de Venta</h2>
-            
+            <div class="flex justify-between items-center border-b pb-2">
+                <h2 class="text-xl font-semibold text-gray-700">3. Venta Activa: <span id="currentEventName" class="text-hot-honey font-bold"></span></h2>
+                <button onclick="endSession()" class="text-sm text-gray-500 hover:text-red-500 transition duration-200">
+                    Finalizar Sesión (Cambiar Evento)
+                </button>
+            </div>
+
             <!-- Entrada de Código de Barras / SKU -->
             <div class="space-y-2">
                 <label for="barcodeInput" class="block text-lg font-medium text-gray-700">Escaneo y Entrada Manual de SKU</label>
@@ -205,9 +228,9 @@
 
         let currentInventory = [];
         let shoppingCart = {}; // {sku: {nivel, precio, cantidad}}
-        let isSetupComplete = false;
         let isScanning = false; // Bandera para controlar el estado del escáner
         let lastScannedCode = null; // Para evitar escaneos duplicados en ráfaga
+        let activeEvent = null; // {id: <timestamp>, name: <string>}
         
         // --- UTILIDADES ---
 
@@ -261,6 +284,62 @@
             }
         }
         
+        // --- GESTIÓN DE VISTAS Y ESTADO ---
+
+        /** Muestra la vista de inicio y carga los eventos. */
+        function showStartView() {
+            document.getElementById('startView').classList.remove('hidden');
+            document.getElementById('setupView').classList.add('hidden');
+            document.getElementById('saleView').classList.add('hidden');
+            loadEvents();
+        }
+
+        /** Muestra la vista de configuración para el evento activo. */
+        function showSetupView(eventName) {
+            document.getElementById('activeEventName').textContent = eventName;
+            document.getElementById('startView').classList.add('hidden');
+            document.getElementById('setupView').classList.remove('hidden');
+            document.getElementById('saleView').classList.add('hidden');
+        }
+
+        /** Muestra la vista de venta con el inventario cargado. */
+        function showSaleView(eventName) {
+            document.getElementById('currentEventName').textContent = eventName;
+            document.getElementById('startView').classList.add('hidden');
+            document.getElementById('setupView').classList.add('hidden');
+            document.getElementById('saleView').classList.remove('hidden');
+            loadInventory();
+        }
+
+        /** Finaliza la sesión de venta y vuelve a la vista de inicio. */
+        function endSession() {
+            if (isScanning) stopScanner();
+            activeEvent = null;
+            localStorage.removeItem('activeEvent');
+            shoppingCart = {};
+            currentInventory = [];
+            showMessage('info', 'Sesión finalizada. Selecciona un nuevo evento.');
+            showStartView();
+        }
+
+        /** Maneja la selección de evento y la transición a SETUP. */
+        function selectEvent() {
+            const selector = document.getElementById('eventSelector');
+            const eventName = selector.value;
+
+            if (eventName) {
+                // Generamos un ID de evento único basado en tiempo
+                activeEvent = {
+                    id: Date.now(),
+                    name: eventName
+                };
+                localStorage.setItem('activeEvent', JSON.stringify(activeEvent));
+                showSetupView(eventName);
+            } else {
+                showMessage('error', 'Por favor, selecciona un evento de la lista.');
+            }
+        }
+        
         // --- CÁMARA Y ESCANEO CON QUAGGAJS ---
 
         /** Inicia o detiene el escáner de cámara. */
@@ -301,7 +380,7 @@
                 inputStream : {
                     name : "Live",
                     type : "LiveStream",
-                    target: '#scannerContainer', // <-- Ajustado a ID string para mayor fiabilidad
+                    target: '#scannerContainer', 
                     constraints: {
                         width: 600,
                         height: 250,
@@ -309,14 +388,12 @@
                     },
                 },
                 decoder : {
-                    // Configuración de tipos de código de barras
                     readers : ["code_128_reader", "ean_reader", "upc_reader", "ean_8_reader"]
                 }
             }, function(err) {
                 if (err) {
                     showMessage('error', `Error al inicializar el escáner (Permisos de cámara o hardware): ${err.message}.`);
                     console.error('Error de Quagga.init:', err);
-                    // Ocultar el contenedor si falla la inicialización
                     document.getElementById('scannerContainer').classList.add('hidden');
                     return;
                 }
@@ -325,27 +402,23 @@
                 showMessage('info', 'Escáner de cámara iniciado. ¡A escanear!');
             });
             
-            // Listener para cuando se detecta un código
             Quagga.onDetected(function(result) {
                 const code = result.codeResult.code;
                 
-                // Implementar un simple debounce para evitar escaneos múltiples del mismo código
                 if (code && code !== lastScannedCode) {
                     lastScannedCode = code;
                     addItemToCart(code);
                     
-                    // Detener la ráfaga de detecciones por 1.5 segundos
-                    Quagga.stop(); // Detiene momentáneamente para evitar la ráfaga
+                    Quagga.stop(); 
                     isScanning = false;
                     
                     setTimeout(() => {
                         if (document.getElementById('scannerContainer').classList.contains('hidden')) {
-                             // Si el usuario ya lo cerró, no reiniciar
                              return;
                         }
-                        Quagga.start(); // Reiniciar el escaneo
+                        Quagga.start(); 
                         isScanning = true;
-                        lastScannedCode = null; // Reiniciar el código anterior
+                        lastScannedCode = null; 
                     }, 1500); 
                 }
             });
@@ -361,15 +434,53 @@
             }
         }
         
-        // --- GESTIÓN DE INVENTARIO Y SETUP ---
+        // --- GESTIÓN DE EVENTOS Y DATOS ---
+
+        /** Carga la lista de eventos desde Apps Script. */
+        async function loadEvents() {
+            const selector = document.getElementById('eventSelector');
+            const button = document.getElementById('startButton');
+            selector.innerHTML = '<option value="" disabled selected>Cargando eventos...</option>';
+            button.disabled = true;
+
+            try {
+                // Notar que la operación se pasa como parámetro URL para GET
+                const result = await fetchWithRetry(`${apiUrl}?operation=GET_EVENTS`, { method: 'GET' });
+                const events = result.data;
+                
+                selector.innerHTML = '';
+                if (events.length === 0) {
+                    selector.innerHTML = '<option value="" disabled selected>No hay eventos creados en Sheets</option>';
+                    showMessage('error', "No hay eventos en la hoja 'EVENTOS'. Por favor, añade nombres en la Columna A.");
+                } else {
+                    selector.innerHTML = '<option value="" disabled selected>-- Selecciona un Evento --</option>';
+                    events.forEach(event => {
+                        const option = document.createElement('option');
+                        option.value = event;
+                        option.textContent = event;
+                        selector.appendChild(option);
+                    });
+                    button.disabled = false;
+                    selector.onchange = () => button.disabled = !selector.value;
+                }
+            } catch (error) {
+                showMessage('error', `Error al cargar eventos: ${error.message}`);
+                selector.innerHTML = '<option value="" disabled selected>Error de comunicación</option>';
+            }
+        }
+
 
         /** Envía los datos de configuración inicial a Apps Script. */
         async function handleSetup() {
+            if (!activeEvent) {
+                showMessage('error', 'Debe seleccionar un evento primero.');
+                return;
+            }
+
             const button = document.getElementById('setupButton');
             button.disabled = true;
             button.textContent = 'Guardando...';
 
-            // 1. Recoger datos del formulario
             const productContainers = document.querySelectorAll('#setupForm > div');
             const productos = [];
             
@@ -379,7 +490,6 @@
                 const cantidadInicial = parseInt(container.querySelector('.qty-input').value) || 0;
                 const precio = parseFloat(container.querySelector('.price-input').value) || 0.00;
 
-                // Validación simple para que el SKU no esté vacío
                 if (!sku.trim()) {
                     throw new Error('El SKU no puede estar vacío.');
                 }
@@ -387,28 +497,22 @@
                 productos.push({ nivel, sku, cantidadInicial, precio });
             });
             
-             console.log("Payload de SETUP:", productos); // Diagnóstico
-            
             const payload = {
                 operation: 'SETUP',
-                productos: productos
+                productos: productos,
+                eventData: activeEvent // Adjuntamos los datos del evento
             };
 
             try {
                 const result = await fetchWithRetry(apiUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' }, // Importante para Apps Script
+                    headers: { 'Content-Type': 'text/plain' }, 
                     body: JSON.stringify(payload)
                 });
                 
                 showMessage('success', result.message);
                 
-                // Transición a la vista de venta y carga de inventario
-                isSetupComplete = true;
-                localStorage.setItem('isSetupComplete', 'true'); // Persistir estado
-                document.getElementById('setupView').classList.add('hidden');
-                document.getElementById('saleView').classList.remove('hidden');
-                loadInventory();
+                showSaleView(activeEvent.name);
 
             } catch (error) {
                 showMessage('error', error.message);
@@ -425,6 +529,7 @@
             display.innerHTML = '<p class="text-center text-blue-500">Actualizando inventario...</p>';
             
             try {
+                // Obtenemos el inventario sin necesidad de pasar el evento, ya que INVENTARIO es el activo.
                 const result = await fetchWithRetry(apiUrl, { method: 'GET' });
                 currentInventory = result.data;
                 renderInventory();
@@ -481,7 +586,6 @@
             }
 
             if (shoppingCart[sku]) {
-                // Si ya está en el carrito, incrementa la cantidad
                 if (shoppingCart[sku].cantidad < inventoryItem.stock) {
                     shoppingCart[sku].cantidad += 1;
                 } else {
@@ -489,7 +593,6 @@
                     return;
                 }
             } else {
-                // Si es nuevo, inicializa
                 shoppingCart[sku] = {
                     nivel: inventoryItem.nivel,
                     precio: inventoryItem.precio,
@@ -548,7 +651,6 @@
         /** Elimina o reduce un artículo del carrito. */
         function removeFromCart(sku) {
             if (shoppingCart[sku]) {
-                // Elimina el artículo del carrito
                 delete shoppingCart[sku];
                 showMessage('info', `Producto removido del carrito.`);
             }
@@ -584,7 +686,6 @@
             const originalText = button.textContent;
             button.textContent = 'Procesando Venta...';
 
-            // Convertir el carrito a un formato de array [{sku, cantidad}]
             const carritoArray = Object.keys(shoppingCart).map(sku => ({
                 sku: sku,
                 cantidad: shoppingCart[sku].cantidad
@@ -592,7 +693,8 @@
 
             const payload = {
                 operation: 'SALE',
-                carrito: carritoArray
+                carrito: carritoArray,
+                eventData: activeEvent // Adjuntamos los datos del evento
             };
 
             try {
@@ -604,11 +706,9 @@
                 
                 showMessage('success', `¡Venta Exitosa! ${result.message}`);
                 
-                // Resetear carrito
                 shoppingCart = {};
                 renderCart();
                 
-                // Actualizar inventario local y visual
                 currentInventory = result.data; 
                 renderInventory();
 
@@ -625,25 +725,16 @@
         // --- INICIALIZACIÓN ---
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Comprueba si el inventario ya existe. Si lo es, saltamos el SETUP.
-            if (localStorage.getItem('isSetupComplete') === 'true') {
-                isSetupComplete = true;
-            }
-
-            if (isSetupComplete) {
-                document.getElementById('setupView').classList.add('hidden');
-                document.getElementById('saleView').classList.remove('hidden');
-                loadInventory();
-            } else {
-                document.getElementById('setupView').classList.remove('hidden');
-                document.getElementById('saleView').classList.add('hidden');
-            }
+            // Revisa si hay un evento activo guardado localmente
+            const savedEvent = localStorage.getItem('activeEvent');
             
-            // Persistir estado de setup localmente
-            if (isSetupComplete) {
-                localStorage.setItem('isSetupComplete', 'true');
+            if (savedEvent) {
+                activeEvent = JSON.parse(savedEvent);
+                // Si hay un evento activo, salta la selección e intenta cargar el inventario
+                showSaleView(activeEvent.name);
             } else {
-                localStorage.removeItem('isSetupComplete');
+                // Si no hay evento activo, muestra la vista de inicio para seleccionar
+                showStartView();
             }
         });
     </script>
