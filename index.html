@@ -39,6 +39,21 @@
             background-color: #cccccc !important;
             cursor: not-allowed;
         }
+        /* Estilos para el scanner de cámara */
+        #scannerContainer {
+            position: relative;
+            width: 100%;
+            height: 200px; /* Tamaño del viewport de la cámara */
+            background-color: #000;
+            margin-top: 10px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #scannerContainer video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
     </style>
     <script>
         tailwind.config = {
@@ -79,11 +94,11 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Cant. Inicial</label>
-                        <input type="number" min="0" value="50" class="qty-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="50">
+                        <input type="number" min="0" value="0" class="qty-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="50">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Precio ($)</label>
-                        <input type="number" step="0.01" min="0" value="12.00" class="price-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="12.00">
+                        <input type="number" step="0.01" min="0" value="0.00" class="price-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="12.00">
                     </div>
                 </div>
 
@@ -94,11 +109,11 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Cant. Inicial</label>
-                        <input type="number" min="0" value="75" class="qty-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="75">
+                        <input type="number" min="0" value="0" class="qty-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="75">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Precio ($)</label>
-                        <input type="number" step="0.01" min="0" value="13.50" class="price-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="13.50">
+                        <input type="number" step="0.01" min="0" value="0.00" class="price-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="13.50">
                     </div>
                 </div>
 
@@ -109,11 +124,11 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Cant. Inicial</label>
-                        <input type="number" min="0" value="25" class="qty-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="25">
+                        <input type="number" min="0" value="0" class="qty-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="25">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Precio ($)</label>
-                        <input type="number" step="0.01" min="0" value="15.00" class="price-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="15.00">
+                        <input type="number" step="0.01" min="0" value="0.00" class="price-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="15.00">
                     </div>
                 </div>
                 
@@ -129,13 +144,23 @@
             
             <!-- Entrada de Código de Barras / SKU -->
             <div class="space-y-2">
-                <label for="barcodeInput" class="block text-lg font-medium text-gray-700">Escanear Código de Barras / SKU</label>
-                <input type="text" id="barcodeInput" class="barcode-input w-full rounded-lg border-2 input-style shadow-lg p-3 focus:outline-none focus:ring-2 focus:ring-hot-honey" 
-                       placeholder="Escanea aquí o ingresa SKU (Miel01, Miel02, Miel03)" 
-                       onkeydown="if(event.key === 'Enter') addItemToCart(this.value); this.value='';" autofocus>
-                <p class="text-xs text-gray-500 pt-1">Presiona ENTER o usa un escáner real. Los SKUs de ejemplo son: Miel01, Miel02, Miel03.</p>
-                <!-- Opcional: Botón de escaneo con cámara (requeriría una librería como QuaggaJS) -->
-                <!-- <button onclick="startCameraScanner()" class="w-full mt-2 bg-gray-200 text-gray-700 py-2 rounded-lg text-sm">Usar Cámara para Escanear (Requiere Librería)</button> -->
+                <label for="barcodeInput" class="block text-lg font-medium text-gray-700">Escaneo y Entrada Manual de SKU</label>
+                <div class="flex space-x-2">
+                    <input type="text" id="barcodeInput" class="barcode-input flex-1 rounded-lg border-2 input-style shadow-lg p-3 focus:outline-none focus:ring-2 focus:ring-hot-honey" 
+                           placeholder="Escanea aquí o ingresa SKU (Miel01, Miel02, Miel03)" 
+                           onkeydown="if(event.key === 'Enter') addItemToCart(this.value); this.value='';" autofocus>
+                    <button onclick="toggleCameraScanner()" id="cameraButton" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 px-4 rounded-lg shadow-md transition duration-200">
+                        <svg id="cameraIcon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.218A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.218A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        <svg id="closeIcon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500 pt-1">Presiona ENTER para añadir, o usa el botón de la cámara para escanear.</p>
+
+                <!-- Contenedor para la Cámara/Video -->
+                <div id="scannerContainer" class="hidden">
+                    <video id="scannerVideo" autoplay playsinline></video>
+                    <p class="text-white text-center text-sm p-2">Cámara activada. Enfoca el código de barras.</p>
+                </div>
             </div>
 
             <!-- Carrito de Compras -->
@@ -177,6 +202,7 @@
         let currentInventory = [];
         let shoppingCart = {}; // {sku: {nivel, precio, cantidad}}
         let isSetupComplete = false;
+        let cameraStream = null; // Para almacenar el stream de la cámara
         
         // --- UTILIDADES ---
 
@@ -230,6 +256,67 @@
             }
         }
         
+        // --- CÁMARA Y ESCANEO (Placeholder para librería externa) ---
+
+        /** Inicia o detiene el escáner de cámara. */
+        function toggleCameraScanner() {
+            const scannerContainer = document.getElementById('scannerContainer');
+            const cameraButton = document.getElementById('cameraButton');
+            const cameraIcon = document.getElementById('cameraIcon');
+            const closeIcon = document.getElementById('closeIcon');
+
+            if (scannerContainer.classList.contains('hidden')) {
+                // Iniciar cámara
+                startCamera();
+                scannerContainer.classList.remove('hidden');
+                cameraIcon.classList.add('hidden');
+                closeIcon.classList.remove('hidden');
+                cameraButton.classList.remove('bg-gray-200');
+                cameraButton.classList.add('bg-red-500', 'text-white');
+            } else {
+                // Detener cámara
+                stopCamera();
+                scannerContainer.classList.add('hidden');
+                cameraIcon.classList.remove('hidden');
+                closeIcon.classList.add('hidden');
+                cameraButton.classList.add('bg-gray-200');
+                cameraButton.classList.remove('bg-red-500', 'text-white');
+            }
+        }
+
+        /** Intenta obtener el stream de la cámara. */
+        function startCamera() {
+            const video = document.getElementById('scannerVideo');
+
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }) // Usa la cámara trasera en móviles
+                    .then(function(stream) {
+                        cameraStream = stream;
+                        video.srcObject = stream;
+                        video.play();
+                        showMessage('info', 'Cámara iniciada. Debe integrar una librería de escaneo (ej. QuaggaJS) para decodificar códigos.');
+                        // NOTA: Aquí se inicializaría la librería de escaneo (QuaggaJS, ZXing, etc.)
+                        // Por ejemplo: Quagga.init({...}, function(err) { Quagga.start(); });
+                    })
+                    .catch(function(err) {
+                        showMessage('error', `Error al acceder a la cámara: ${err.name}. Asegúrese de tener permisos.`);
+                        console.error("Error al acceder a la cámara:", err);
+                        toggleCameraScanner(); // Ocultar si falla
+                    });
+            } else {
+                showMessage('error', 'Su navegador no soporta la API de la cámara (getUserMedia).');
+            }
+        }
+
+        /** Detiene el stream de la cámara. */
+        function stopCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+                // NOTA: Aquí se detendría la librería de escaneo (ej: Quagga.stop();)
+            }
+        }
+        
         // --- GESTIÓN DE INVENTARIO Y SETUP ---
 
         /** Envía los datos de configuración inicial a Apps Script. */
@@ -247,6 +334,11 @@
                 const sku = container.querySelector('.sku-input').value;
                 const cantidadInicial = parseInt(container.querySelector('.qty-input').value) || 0;
                 const precio = parseFloat(container.querySelector('.price-input').value) || 0.00;
+
+                // Validación simple para que el SKU no esté vacío
+                if (!sku.trim()) {
+                    throw new Error('El SKU no puede estar vacío.');
+                }
 
                 productos.push({ nivel, sku, cantidadInicial, precio });
             });
@@ -308,7 +400,6 @@
 
             display.innerHTML = '';
             currentInventory.forEach(item => {
-                // CORRECCIÓN: Se reemplazó la coma por el espacio para concatenar clases CSS
                 const stockColor = item.stock > 10 ? 'bg-green-100 text-green-800' : 
                                    item.stock > 0 ? 'bg-yellow-100 text-yellow-800' : 
                                    'bg-red-100 text-red-800';
