@@ -172,8 +172,7 @@
 
     <script>
         // ¡CRÍTICO! Este es el URL de la aplicación web de Apps Script (termina en /exec)
-        // URL de ejecución actualizado después del redespliegue.
-        const apiUrl = 'https://script.google.com/macros/s/AKfycbxy1UmeTQKKRyCO_Z4SieVb4rcvQZDw9hV0lWIKPsCWDPeJ1BRU37SheKkgZsjuVOVHzQ/exec'; 
+        const apiUrl = 'https://script.google.com/macros/u/1/s/AKfycby73NmZ8qEwoKsm5UV3qdmhirai5f_ec6i7sT9nbwEeBF6G5528iQipOP0BvdgvzCEPmw/exec'; 
 
         let currentInventory = [];
         let shoppingCart = {}; // {sku: {nivel, precio, cantidad}}
@@ -194,3 +193,323 @@
                 messageBox.classList.add('bg-red-100', 'text-red-800');
             } else {
                 messageBox.classList.add('bg-blue-100', 'text-blue-800');
+            }
+
+            // Ocultar después de 5 segundos
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 5000);
+        }
+
+        /** Realiza la llamada a la API con manejo de errores y reintentos. */
+        async function fetchWithRetry(url, options = {}, retries = 3) {
+             console.log("Intentando fetch a URL:", url); // Diagnóstico
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        // Si la respuesta no es OK (ej. 404, 500)
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    if (data.status === 'error') {
+                         // Si el script de Apps Script devuelve un error
+                         throw new Error(`Error de servidor: ${data.message}`);
+                    }
+                    return data;
+
+                } catch (error) {
+                    console.error(`Intento ${i + 1} fallido:`, error);
+                    if (i === retries - 1) {
+                        // Si es el último intento, lanza el error.
+                        throw new Error(`Fallo en la comunicación con Google Sheets: ${error.message}. Asegúrate de que el URL de Apps Script sea correcto y esté desplegado.`);
+                    }
+                    // Espera exponencial antes de reintentar
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                }
+            }
+        }
+        
+        // --- GESTIÓN DE INVENTARIO Y SETUP ---
+
+        /** Envía los datos de configuración inicial a Apps Script. */
+        async function handleSetup() {
+            const button = document.getElementById('setupButton');
+            button.disabled = true;
+            button.textContent = 'Guardando...';
+
+            // 1. Recoger datos del formulario
+            const productContainers = document.querySelectorAll('#setupForm > div');
+            const productos = [];
+            
+            productContainers.forEach(container => {
+                const nivel = container.getAttribute('data-nivel');
+                const sku = container.querySelector('.sku-input').value;
+                const cantidadInicial = parseInt(container.querySelector('.qty-input').value) || 0;
+                const precio = parseFloat(container.querySelector('.price-input').value) || 0.00;
+
+                productos.push({ nivel, sku, cantidadInicial, precio });
+            });
+            
+             console.log("Payload de SETUP:", productos); // Diagnóstico
+            
+            const payload = {
+                operation: 'SETUP',
+                productos: productos
+            };
+
+            try {
+                const result = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' }, // Importante para Apps Script
+                    body: JSON.stringify(payload)
+                });
+                
+                showMessage('success', result.message);
+                
+                // Transición a la vista de venta y carga de inventario
+                isSetupComplete = true;
+                localStorage.setItem('isSetupComplete', 'true'); // Persistir estado
+                document.getElementById('setupView').classList.add('hidden');
+                document.getElementById('saleView').classList.remove('hidden');
+                loadInventory();
+
+            } catch (error) {
+                showMessage('error', error.message);
+                console.error("Error en handleSetup:", error);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Guardar Inventario e Iniciar Venta';
+            }
+        }
+
+        /** Carga el inventario actual de Google Sheets. */
+        async function loadInventory() {
+            const display = document.getElementById('inventoryDisplay');
+            display.innerHTML = '<p class="text-center text-blue-500">Actualizando inventario...</p>';
+            
+            try {
+                const result = await fetchWithRetry(apiUrl, { method: 'GET' });
+                currentInventory = result.data;
+                renderInventory();
+            } catch (error) {
+                showMessage('error', `Error al cargar inventario: ${error.message}`);
+                display.innerHTML = '<p class="text-center text-red-500">Error al cargar inventario. Revisa el Apps Script.</p>';
+            }
+        }
+
+        /** Renderiza el inventario en la vista de venta. */
+        function renderInventory() {
+            const display = document.getElementById('inventoryDisplay');
+            if (currentInventory.length === 0) {
+                display.innerHTML = '<p class="text-center text-red-500">No hay inventario configurado. Vuelve a la Configuración.</p>';
+                return;
+            }
+
+            display.innerHTML = '';
+            currentInventory.forEach(item => {
+                const stockColor = item.stock > 10 ? 'bg-green-100 text-green-800' : 
+                                   item.stock > 0 ? 'bg-yellow-100 text-yellow-800' : 
+                                   'bg-red-100 text-red-800';
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex justify-between items-center p-2 rounded-lg bg-white shadow-sm border';
+                itemDiv.innerHTML = `
+                    <div class="font-medium text-gray-700">${item.nivel} (${item.sku})</div>
+                    <div class="space-x-4 flex items-center">
+                        <span class="text-lg font-bold text-hot-honey">$${item.precio.toFixed(2)}</span>
+                        <span class="text-sm font-semibold px-2 py-1 rounded-full ${stockColor}">Stock: ${item.stock}</span>
+                    </div>
+                `;
+                display.appendChild(itemDiv);
+            });
+        }
+        
+        // --- GESTIÓN DE VENTA Y CARRITO ---
+
+        /** Agrega un artículo al carrito al escanear/ingresar SKU. */
+        function addItemToCart(sku) {
+            sku = sku.trim();
+            if (!sku) return;
+            
+            const inventoryItem = currentInventory.find(item => item.sku === sku);
+            
+            if (!inventoryItem) {
+                showMessage('error', `SKU ${sku} no válido. No se encontró el producto.`);
+                return;
+            }
+
+            if (inventoryItem.stock <= 0) {
+                showMessage('error', `¡AGOTADO! No hay stock para ${inventoryItem.nivel}.`);
+                return;
+            }
+
+            if (shoppingCart[sku]) {
+                // Si ya está en el carrito, incrementa la cantidad
+                if (shoppingCart[sku].cantidad < inventoryItem.stock) {
+                    shoppingCart[sku].cantidad += 1;
+                } else {
+                    showMessage('error', `No puedes agregar más de ${inventoryItem.stock} unidades de ${inventoryItem.nivel} (máximo disponible).`);
+                    return;
+                }
+            } else {
+                // Si es nuevo, inicializa
+                shoppingCart[sku] = {
+                    nivel: inventoryItem.nivel,
+                    precio: inventoryItem.precio,
+                    cantidad: 1
+                };
+            }
+            
+            renderCart();
+            updateSaleButtonStatus();
+            showMessage('success', `${inventoryItem.nivel} añadido al carrito.`);
+        }
+
+        /** Renderiza el carrito de compras. */
+        function renderCart() {
+            const itemsContainer = document.getElementById('cartItems');
+            const totalDisplay = document.getElementById('cartTotal');
+            const emptyMessage = document.getElementById('emptyCartMessage');
+            const cartCountDisplay = document.getElementById('cartCount');
+            
+            let total = 0;
+            let totalItems = 0;
+            itemsContainer.innerHTML = '';
+
+            for (const sku in shoppingCart) {
+                const item = shoppingCart[sku];
+                const subtotal = item.precio * item.cantidad;
+                total += subtotal;
+                totalItems += item.cantidad;
+
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex justify-between items-center p-2 bg-gray-50 rounded-md border-l-4 border-hot-honey';
+                itemDiv.innerHTML = `
+                    <div class="flex-1">
+                        <div class="font-semibold text-gray-800">${item.nivel} (${sku})</div>
+                        <div class="text-sm text-gray-600">$${item.precio.toFixed(2)} c/u</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="font-bold text-lg text-hot-honey">$${subtotal.toFixed(2)}</div>
+                        <div class="text-sm">Cant: ${item.cantidad}</div>
+                    </div>
+                    <button data-sku="${sku}" onclick="removeFromCart('${sku}')" class="ml-2 text-red-500 hover:text-red-700 text-xl font-bold p-1 leading-none">&times;</button>
+                `;
+                itemsContainer.appendChild(itemDiv);
+            }
+
+            totalDisplay.textContent = `$${total.toFixed(2)}`;
+            cartCountDisplay.textContent = `${totalItems} productos`;
+            
+            if (totalItems === 0) {
+                emptyMessage.classList.remove('hidden');
+            } else {
+                emptyMessage.classList.add('hidden');
+            }
+        }
+
+        /** Elimina o reduce un artículo del carrito. */
+        function removeFromCart(sku) {
+            if (shoppingCart[sku]) {
+                // Elimina el artículo del carrito
+                delete shoppingCart[sku];
+                showMessage('info', `Producto removido del carrito.`);
+            }
+            renderCart();
+            updateSaleButtonStatus();
+        }
+
+        /** Habilita/deshabilita el botón de venta. */
+        function updateSaleButtonStatus() {
+            const button = document.getElementById('saleButton');
+            const totalItems = Object.values(shoppingCart).reduce((sum, item) => sum + item.cantidad, 0);
+            button.disabled = totalItems === 0;
+            if (totalItems === 0) {
+                 button.textContent = 'Añade productos para vender';
+                 button.classList.add('disabled-btn');
+                 button.classList.remove('btn-primary');
+            } else {
+                 button.textContent = `Finalizar Venta (Total $${document.getElementById('cartTotal').textContent.slice(1)})`;
+                 button.classList.remove('disabled-btn');
+                 button.classList.add('btn-primary');
+            }
+        }
+
+        /** Finaliza la venta y registra en Apps Script. */
+        async function handleSale() {
+            if (Object.keys(shoppingCart).length === 0) {
+                showMessage('error', 'El carrito está vacío.');
+                return;
+            }
+
+            const button = document.getElementById('saleButton');
+            button.disabled = true;
+            const originalText = button.textContent;
+            button.textContent = 'Procesando Venta...';
+
+            // Convertir el carrito a un formato de array [{sku, cantidad}]
+            const carritoArray = Object.keys(shoppingCart).map(sku => ({
+                sku: sku,
+                cantidad: shoppingCart[sku].cantidad
+            }));
+
+            const payload = {
+                operation: 'SALE',
+                carrito: carritoArray
+            };
+
+            try {
+                const result = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload)
+                });
+                
+                showMessage('success', `¡Venta Exitosa! ${result.message}`);
+                
+                // Resetear carrito
+                shoppingCart = {};
+                renderCart();
+                
+                // Actualizar inventario local y visual
+                currentInventory = result.data; 
+                renderInventory();
+
+            } catch (error) {
+                showMessage('error', error.message);
+            } finally {
+                document.getElementById('barcodeInput').focus();
+                button.disabled = false;
+                button.textContent = originalText;
+                updateSaleButtonStatus();
+            }
+        }
+
+        // --- INICIALIZACIÓN ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Comprueba si el inventario ya existe. Si lo es, saltamos el SETUP.
+            if (localStorage.getItem('isSetupComplete') === 'true') {
+                isSetupComplete = true;
+            }
+
+            if (isSetupComplete) {
+                document.getElementById('setupView').classList.add('hidden');
+                document.getElementById('saleView').classList.remove('hidden');
+                loadInventory();
+            } else {
+                document.getElementById('setupView').classList.remove('hidden');
+                document.getElementById('saleView').classList.add('hidden');
+            }
+            
+            // Persistir estado de setup localmente
+            if (isSetupComplete) {
+                localStorage.setItem('isSetupComplete', 'true');
+            } else {
+                localStorage.removeItem('isSetupComplete');
+            }
+        });
+    </script>
+</body>
+</html>
