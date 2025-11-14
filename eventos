@@ -131,7 +131,7 @@
             <div class="grid md:grid-cols-3 gap-6 mb-8">
                 <!-- Tarjeta de Inventario Total -->
                 <div class="md:col-span-1 p-6 bg-dark-slate text-white rounded-xl shadow-lg">
-                    <p class="text-sm uppercase opacity-75">Inventario Total Evento</p>
+                    <p class="text-sm uppercase opacity-75">Inventario Total Evento.</p>
                     <div class="text-5xl font-extrabold mt-1" id="current-total-inventory-display">--</div>
                     <p class="text-lg mt-2 font-medium" id="event-name-display">Cargando...</p>
                 </div>
