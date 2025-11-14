@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <base target="_top"> <!-- Necesario para Apps Script -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Ventas de Miel Picante</title>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Carga de QuaggaJS para escaneo de código de barras por cámara -->
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'honey-gold': '#FFC300',
+                        'chili-red': '#E94F37',
+                        'dark-slate': '#1E293B',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        .scroll-container {
+            max-height: 50vh;
+            overflow-y: auto;
+            -ms-overflow-style: none; /* IE and Edge */
+            scrollbar-width: none; /* Firefox */
+        }
+        .scroll-container::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
+        }
+        /* Estilos específicos para el feed de la cámara de QuaggaJS */
+        #scanner-container video {
+            width: 100%;
+            height: 100%;
+        }
+        #scanner-container canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans min-h-screen p-4 sm:p-8">
+    
+    <div id="app" class="max-w-4xl mx-auto bg-white shadow-2xl rounded-xl p-6 sm:p-8">
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold text-dark-slate mb-2 flex items-center">
+                <span class="mr-3 text-honey-gold text-5xl">🌶️</span> Gestión de Miel Picante
+            </h1>
+            <p class="text-gray-500">Sistema de Inventario y Ventas por Evento (Google Sheets Backend)</p>
+        </header>
+
+        <!-- Mensajes del Sistema -->
+        <div id="message-container" class="mb-4 hidden">
+            <div id="message-box" class="p-3 rounded-lg font-medium"></div>
+        </div>
+
+        <!-- Sección de Selección de Evento -->
+        <div class="mb-8 p-5 bg-honey-gold/10 rounded-lg shadow-inner">
+            <h2 class="text-2xl font-semibold text-dark-slate mb-3">1. Seleccionar Evento Actual</h2>
+            <div id="event-selector-container" class="flex flex-col sm:flex-row sm:space-x-4">
+                <select id="event-select" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-chili-red focus:border-chili-red transition duration-150 bg-white shadow-sm">
+                    <option value="">-- Selecciona un Evento --</option>
+                </select>
+                <button id="show-new-event-btn" class="mt-3 sm:mt-0 p-3 bg-chili-red text-white font-semibold rounded-lg hover:bg-chili-red/90 transition duration-200 shadow-md flex-shrink-0">
+                    + Nuevo Evento
+                </button>
+            </div>
+            <!-- USER ID no es necesario ya que el Apps Script lo obtiene automáticamente -->
+            <p id="user-id-display" class="mt-2 text-xs text-gray-500 hidden">Usuario ID: <span id="current-user-id">Apps Script</span></p> 
+        </div>
+
+        <!-- Formulario para Crear Nuevo Evento (Inicialmente oculto) -->
+        <div id="new-event-form-container" class="hidden mb-8 p-6 bg-dark-slate/5 rounded-xl shadow-md">
+            <h2 class="text-2xl font-semibold text-dark-slate mb-4 border-b pb-2">Crear Nuevo Evento</h2>
+            <form id="new-event-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Campos del Evento -->
+                <input type="text" id="event-name" placeholder="Nombre del Evento (Ej: Feria Guadalajara)" required class="col-span-3 p-3 border rounded-lg">
+                <input type="text" id="event-location" placeholder="Lugar del Evento" required class="col-span-2 p-3 border rounded-lg">
+                <select id="iva-rate" class="p-3 border rounded-lg" required>
+                    <option value="" disabled>Tasa de IVA del Evento</option>
+                    <option value="0.00">0% (Sin IVA)</option>
+                    <option value="0.16" selected>16% (Tasa Común)</option>
+                    <option value="0.08">8% (Tasa Reducida)</option>
+                </select>
+
+                <!-- Sección de Productos -->
+                <div class="col-span-3 mt-4">
+                    <h3 class="text-xl font-semibold mb-3 border-t pt-3">2. Definir Productos y Stock</h3>
+                    
+                    <!-- Formulario de Producto Individual -->
+                    <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-white p-4 rounded-lg shadow-inner mb-3 border">
+                        <input type="text" id="product-name" placeholder="Nombre Producto" class="col-span-1 p-2 border rounded-lg" required>
+                        <input type="text" id="product-barcode" placeholder="Código de Barras (Único)" class="col-span-1 p-2 border rounded-lg">
+                        <input type="number" id="initial-inventory" placeholder="Inventario" required min="1" class="col-span-1 p-2 border rounded-lg">
+                        <input type="number" id="price-with-iva" placeholder="Precio con IVA ($)" required min="0.01" step="0.01" class="col-span-1 p-2 border rounded-lg">
+                        <button type="button" id="add-product-btn" class="col-span-1 p-2 bg-honey-gold text-dark-slate font-semibold rounded-lg hover:bg-honey-gold/90 transition duration-200 shadow-sm">
+                            Añadir Producto
+                        </button>
+                    </div>
+
+                    <!-- Lista de Productos Añadidos -->
+                    <div class="bg-white rounded-lg shadow-md mt-4 p-4">
+                        <h4 class="font-medium text-lg mb-2">Productos a Incluir:</h4>
+                        <ul id="products-to-add-list" class="space-y-2">
+                            <li class="text-gray-500 italic text-sm">Usa el botón "Añadir Producto" de arriba para listar tus productos (mínimo 1).</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Botones Finales del Evento -->
+                <div class="col-span-3 flex justify-end space-x-3 mt-4">
+                    <button type="button" id="cancel-new-event-btn" class="p-3 bg-gray-400 text-white font-semibold rounded-lg hover:bg-gray-500 transition duration-200">Cancelar</button>
+                    <button type="submit" id="save-event-btn" class="p-3 bg-chili-red text-white font-semibold rounded-lg hover:bg-chili-red/90 transition duration-200 shadow-md disabled:opacity-50" disabled>
+                        Guardar Evento
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Sección de Venta e Inventario (Inicialmente inactivo) -->
+        <div id="sales-inventory-section" class="hidden">
+            <div class="grid md:grid-cols-3 gap-6 mb-8">
+                <!-- Tarjeta de Inventario Total -->
+                <div class="md:col-span-1 p-6 bg-dark-slate text-white rounded-xl shadow-lg">
+                    <p class="text-sm uppercase opacity-75">Inventario Total Evento</p>
+                    <div class="text-5xl font-extrabold mt-1" id="current-total-inventory-display">--</div>
+                    <p class="text-lg mt-2 font-medium" id="event-name-display">Cargando...</p>
+                </div>
+                <!-- Tarjeta de Producto Escaneado -->
+                <div class="md:col-span-2 grid grid-cols-2 gap-4">
+                    <div class="p-4 bg-honey-gold/70 text-dark-slate rounded-xl shadow-lg">
+                        <p class="text-sm uppercase font-semibold">Producto Escaneado</p>
+                        <div class="text-xl font-bold mt-1" id="scanned-product-name">---</div>
+                        <p class="text-sm mt-1">Stock Específico: <span id="scanned-product-inventory">--</span></p>
+                        <p class="text-xs opacity-80">Barcode: <span id="scanned-barcode-display">--</span></p>
+                    </div>
+                    <div class="p-4 bg-chili-red text-white rounded-xl shadow-lg">
+                        <p class="text-sm uppercase opacity-75">Precio de Venta (Con IVA)</p>
+                        <div class="text-3xl font-extrabold mt-1" id="price-with-iva-display">$0.00</div>
+                        <p class="text-sm mt-1 opacity-75" id="price-no-iva-info">Sin IVA: $0.00 | IVA: <span id="iva-rate-display">0%</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Registro de Venta Rápida por Barcode -->
+            <div class="mb-8 p-6 bg-chili-red/10 rounded-xl shadow-inner">
+                <h3 class="text-xl font-semibold text-dark-slate mb-3 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-chili-red" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-7-9a1 1 0 112 0v4a1 1 0 11-2 0V9zm4-1a1 1 0 100 2h6a1 1 0 100-2H7zm-3 8a1 1 0 102 0v-4a1 1 0 10-2 0v4zm7 0a1 1 0 102 0v-6a1 1 0 10-2 0v6zm4 0a1 1 0 102 0v-8a1 1 0 10-2 0v8z" clip-rule="evenodd" />
+                    </svg>
+                    Registro de Venta
+                </h3>
+                <div class="flex space-x-2">
+                    <!-- Input Manual -->
+                    <input type="text" id="scan-barcode-input" placeholder="Ingresa el código manualmente y ENTER" class="flex-grow p-4 text-lg border-2 border-chili-red rounded-lg focus:ring-chili-red focus:border-chili-red transition duration-150 shadow-md">
+                    <!-- Botón para Abrir Escáner -->
+                    <button id="open-scanner-btn" class="p-4 bg-honey-gold text-dark-slate font-semibold rounded-lg hover:bg-honey-gold/90 transition duration-200 shadow-md flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664.89l1.455.513c.725.254 1.488.397 2.271.397.783 0 1.546-.143 2.271-.397l1.455-.513A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    </button>
+                </div>
+                <button id="manual-sell-btn" class="mt-3 w-full p-3 bg-chili-red text-white font-semibold rounded-lg hover:bg-chili-red/90 transition duration-200 shadow-md">
+                    Registrar Venta (Código Manual en Input)
+                </button>
+            </div>
+
+            <!-- Historial de Ventas -->
+            <div class="p-6 bg-gray-50 rounded-xl shadow-md">
+                <h3 class="text-xl font-semibold text-dark-slate mb-3">Historial de Ventas de <span id="event-history-name">este Evento</span></h3>
+                <div class="scroll-container">
+                    <ul id="sales-history" class="space-y-2">
+                        <li class="text-gray-500 italic text-sm">Cargando historial...</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Escaneo con Cámara (Inicialmente Oculto) -->
+    <div id="scanner-modal" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl">
+            <h3 class="text-xl font-bold text-dark-slate mb-4">Escanear Producto con Cámara</h3>
+            <!-- El contenedor de QuaggaJS -->
+            <div id="scanner-container" class="relative w-full h-64 border-4 border-chili-red/50 rounded-lg overflow-hidden mb-4 bg-gray-900">
+                <div id="scanner-placeholder" class="absolute inset-0 flex items-center justify-center text-gray-300 font-medium">Cargando cámara...</div>
+            </div>
+            <p id="scanner-result" class="text-center text-chili-red font-semibold mb-4 hidden"></p>
+            <button id="stop-scanner-btn" class="w-full p-3 bg-gray-400 text-white font-semibold rounded-lg hover:bg-gray-500 transition duration-200">
+                Cerrar Escáner
+            </button>
+        </div>
+    </div>
+
+    <!-- Script de Lógica de la Aplicación -->
+    <script>
+        // Variables Globales de la Aplicación
+        let currentEventId = null;
+        let currentEvent = null; 
+        let isReady = false;
+        
+        let productsToCreate = {}; // { barcode: {name, initialInventory, priceWithIVA} }
+
+        // --- UTILIDADES ---
+
+        /** Muestra un mensaje temporal en la interfaz */
+        function showMessage(text, type = 'success') {
+            const container = document.getElementById('message-container');
+            const box = document.getElementById('message-box');
+            
+            container.classList.remove('hidden');
+            box.textContent = text;
+            
+            box.classList.remove('bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800', 'bg-blue-100', 'text-blue-800');
+            if (type === 'success') {
+                box.classList.add('bg-green-100', 'text-green-800');
+            } else if (type === 'error') {
+                box.classList.add('bg-red-100', 'text-red-800');
+            } else {
+                box.classList.add('bg-blue-100', 'text-blue-800');
+            }
+
+            setTimeout(() => {
+                container.classList.add('hidden');
+            }, 5000);
+        }
+
+        /** Formatea un número como moneda. */
+        function formatCurrency(amount) {
+            const num = parseFloat(amount);
+            if (isNaN(num)) return '$0.00';
+            return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(num);
+        }
+
+        /**
+         * Calcula la separación de IVA.
+         * @param {number} priceWithIVA Precio total.
+         * @param {number} ivaRate Tasa de IVA (ej: 0.16).
+         * @returns {{priceWithoutIVA: number, ivaAmount: number}}
+         */
+        function calculateIVA(priceWithIVA, ivaRate) {
+            const rate = parseFloat(ivaRate);
+            if (rate === 0 || isNaN(rate)) {
+                 return { priceWithoutIVA: priceWithIVA, ivaAmount: 0 };
+            }
+            const priceWithoutIVA = priceWithIVA / (1 + rate);
+            const ivaAmount = priceWithIVA - priceWithoutIVA;
+            
+            return {
+                priceWithoutIVA: Math.round(priceWithoutIVA * 100) / 100, 
+                ivaAmount: Math.round(ivaAmount * 100) / 100
+            };
+        }
+        
+        // --- MANEJO DE EVENTOS (Apps Script Calls) ---
+
+        /** Carga todos los eventos disponibles y llena el select. */
+        function loadEvents() {
+            if (!isReady) return;
+            document.getElementById('event-select').disabled = true;
+
+            google.script.run
+                .withSuccessHandler(renderEvents)
+                .withFailureHandler(e => showMessage("Error al cargar eventos: " + e, 'error'))
+                .getEvents();
+        }
+
+        /** Renderiza la lista de eventos en el selector. */
+        function renderEvents(events) {
+            document.getElementById('event-select').disabled = false;
+            if (events.error) {
+                showMessage("Error en el servidor al cargar eventos: " + events.error, 'error');
+                return;
+            }
+
+            const eventSelect = document.getElementById('event-select');
+            eventSelect.innerHTML = '<option value="">-- Selecciona un Evento --</option>';
+            
+            if (events && events.length > 0) {
+                events.forEach(event => {
+                    const option = document.createElement('option');
+                    option.value = event.id;
+                    option.textContent = `${event.name} (${event.location}) - Inv Total: ${event.totalInventory}`;
+                    option.dataset.ivaRate = event.ivaRate; 
+                    eventSelect.appendChild(option);
+                });
+            }
+
+            if (currentEventId && eventSelect.querySelector(`option[value="${currentEventId}"]`)) {
+                 eventSelect.value = currentEventId;
+            } else {
+                 hideSalesSection();
+            }
+        }
+        
+        /** Carga los datos de un evento seleccionado y actualiza la UI. */
+        function loadEventData(eventId) {
+            if (!eventId) {
+                 hideSalesSection();
+                 return;
+            }
+            currentEventId = eventId;
+            showSalesSection();
+
+            google.script.run
+                .withSuccessHandler(handleEventDataLoad)
+                .withFailureHandler(e => showMessage("Error al cargar los datos del evento: " + e, 'error'))
+                .loadEventData(eventId);
+        }
+
+        /** Maneja la respuesta de loadEventData */
+        function handleEventDataLoad(eventData) {
+            if (eventData.error) {
+                showMessage("Error al cargar evento: " + eventData.error, 'error');
+                hideSalesSection();
+                return;
+            }
+            
+            currentEvent = eventData;
+            
+            // 1. Calcular y mostrar Inventario Total
+            const totalInventory = Object.values(currentEvent.products || {}).reduce((sum, p) => sum + p.currentInventory, 0);
+            document.getElementById('current-total-inventory-display').textContent = totalInventory;
+            document.getElementById('event-name-display').textContent = currentEvent.name;
+            document.getElementById('event-history-name').textContent = currentEvent.name;
+            document.getElementById('iva-rate-display').textContent = `${(currentEvent.ivaRate * 100).toFixed(0)}%`;
+
+            // 2. Resetear datos del producto escaneado
+            updateScannedProductDisplay();
+
+            // 3. Cargar historial de ventas
+            loadSalesHistory(currentEvent.id);
+        }
+
+        /** Carga el historial de ventas del evento seleccionado. */
+        function loadSalesHistory(eventId) {
+            google.script.run
+                .withSuccessHandler(renderSalesHistory)
+                .withFailureHandler(e => showMessage("Error al cargar historial de ventas: " + e, 'error'))
+                .getSalesHistory(eventId);
+        }
+
+        /** Renderiza la lista de transacciones. */
+        function renderSalesHistory(sales) {
+            const salesHistoryUl = document.getElementById('sales-history');
+            salesHistoryUl.innerHTML = '';
+            
+            if (sales.error) {
+                salesHistoryUl.innerHTML = '<li class="text-red-500 italic text-sm">Error al cargar historial.</li>';
+                showMessage("Error al cargar historial de ventas: " + sales.error, 'error');
+                return;
+            }
+
+            if (!sales || sales.length === 0) {
+                salesHistoryUl.innerHTML = '<li class="text-gray-500 italic text-sm">No hay ventas registradas aún.</li>';
+                return;
+            }
+            
+            sales.forEach(sale => {
+                const { productName, productBarcode, priceTotal, priceWithoutIVA, ivaAmount, timestamp } = sale;
+                const li = document.createElement('li');
+                li.className = 'p-3 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col sm:flex-row sm:justify-between items-start sm:items-center text-sm';
+                
+                let time = '';
+                try {
+                    time = new Date(timestamp).toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit'});
+                } catch (e) {
+                    time = 'Hora desconocida';
+                }
+                
+                li.innerHTML = `
+                    <div class="mb-1 sm:mb-0">
+                        <span class="font-bold text-dark-slate">${formatCurrency(priceTotal)}</span> - 
+                        <span class="text-chili-red font-medium">${productName}</span> 
+                        <span class="text-gray-400 text-xs ml-2">(${productBarcode})</span>
+                        <span class="text-gray-500 block sm:inline ml-0 sm:ml-4 text-xs">(${formatCurrency(priceWithoutIVA)} s/IVA, ${formatCurrency(ivaAmount)} IVA)</span>
+                    </div>
+                    <span class="text-xs text-gray-400 flex-shrink-0">${time}</span>
+                `;
+                salesHistoryUl.appendChild(li);
+            });
+        }
+
+
+        // --- UI UTILITIES ---
+
+        /** Actualiza las tarjetas de visualización del producto escaneado (o las resetea). */
+        function updateScannedProductDisplay(product = null) {
+            const nameDisplay = document.getElementById('scanned-product-name');
+            const inventoryDisplay = document.getElementById('scanned-product-inventory');
+            const barcodeDisplay = document.getElementById('scanned-barcode-display');
+            const priceDisplay = document.getElementById('price-with-iva-display');
+            const priceNoIvaInfo = document.getElementById('price-no-iva-info');
+            const ivaRateDisplay = document.getElementById('iva-rate-display');
+
+            if (product) {
+                const ivaRateText = ivaRateDisplay.textContent.replace('%', '');
+                const ivaRate = parseFloat(ivaRateText) / 100;
+                const { priceWithoutIVA } = calculateIVA(product.priceWithIVA, ivaRate);
+
+                nameDisplay.textContent = product.name;
+                inventoryDisplay.textContent = product.currentInventory;
+                barcodeDisplay.textContent = product.barcode;
+                priceDisplay.textContent = formatCurrency(product.priceWithIVA);
+                priceNoIvaInfo.innerHTML = `Sin IVA: ${formatCurrency(priceWithoutIVA)} | IVA: ${ivaRateDisplay.textContent}`;
+            } else {
+                nameDisplay.textContent = '---';
+                inventoryDisplay.textContent = '--';
+                barcodeDisplay.textContent = '--';
+                priceDisplay.textContent = '$0.00';
+            }
+        }
+
+        // --- MANEJO DE PRODUCTOS EN EL FORMULARIO DE NUEVO EVENTO ---
+
+        /** Renderiza la lista de productos temporales */
+        function renderProductList() {
+            const list = document.getElementById('products-to-add-list');
+            list.innerHTML = '';
+            
+            const productKeys = Object.keys(productsToCreate);
+            
+            if (productKeys.length === 0) {
+                list.innerHTML = '<li class="text-gray-500 italic text-sm">Usa el botón "Añadir Producto" de arriba para listar tus productos (mínimo 1).</li>';
+                document.getElementById('save-event-btn').disabled = true;
+                return;
+            }
+
+            document.getElementById('save-event-btn').disabled = false;
+
+            productKeys.forEach(barcode => {
+                const product = productsToCreate[barcode];
+                const ivaRate = parseFloat(document.getElementById('iva-rate').value);
+                const { priceWithoutIVA } = calculateIVA(product.priceWithIVA, ivaRate);
+
+                const li = document.createElement('li');
+                li.className = 'p-3 bg-gray-100 rounded-lg flex justify-between items-center border border-honey-gold/50 text-dark-slate';
+                
+                li.innerHTML = `
+                    <div class="flex-grow">
+                        <span class="font-bold">${product.name}</span> 
+                        <span class="text-xs text-gray-500 ml-2">(SKU: ${product.barcode})</span>
+                        <div class="text-sm">
+                            Stock: ${product.initialInventory} | Precio: ${formatCurrency(product.priceWithIVA)} 
+                            <span class="text-xs text-gray-500">(${formatCurrency(priceWithoutIVA)} s/IVA)</span>
+                        </div>
+                    </div>
+                    <button data-barcode="${barcode}" class="remove-product-btn p-1 ml-3 text-chili-red hover:text-red-700 transition duration-150">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                `;
+                list.appendChild(li);
+            });
+            
+            // Asignar listeners a los botones de eliminar
+            document.querySelectorAll('.remove-product-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const barcodeToRemove = e.currentTarget.dataset.barcode;
+                    delete productsToCreate[barcodeToRemove];
+                    renderProductList();
+                });
+            });
+        }
+
+        // --- CREACIÓN DE EVENTO (Formulario Submit) ---
+
+        async function handleNewEventSubmit(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('event-name').value.trim();
+            const location = document.getElementById('event-location').value.trim();
+            const ivaRateValue = document.getElementById('iva-rate').value; 
+
+            if (!name || !location || ivaRateValue === "") {
+                 showMessage("Error: Por favor, completa todos los campos del evento.", 'error');
+                 return;
+            }
+
+            if (Object.keys(productsToCreate).length === 0) {
+                showMessage("Por favor, incluye al menos un producto en la lista antes de Guardar.", 'error');
+                return;
+            }
+
+            document.getElementById('save-event-btn').disabled = true;
+
+            const newEvent = {
+                name,
+                location,
+                ivaRate: ivaRateValue,
+                products: productsToCreate,
+            };
+
+            google.script.run
+                .withSuccessHandler(response => {
+                    document.getElementById('save-event-btn').disabled = false;
+                    if (response.error) {
+                        showMessage(`Error al guardar el evento: ${response.error}`, 'error');
+                    } else {
+                        showMessage(`Evento "${name}" creado exitosamente. Recargando eventos...`, 'success');
+                        
+                        // Limpiar estado y UI
+                        productsToCreate = {};
+                        document.getElementById('new-event-form').reset();
+                        renderProductList();
+                        document.getElementById('new-event-form-container').classList.add('hidden');
+                        loadEvents(); // Recargar la lista de eventos
+                    }
+                })
+                .withFailureHandler(e => {
+                    document.getElementById('save-event-btn').disabled = false;
+                    showMessage(`Error de conexión con Apps Script: ${e}`, 'error');
+                })
+                .createEvent(newEvent);
+        }
+
+        // --- REGISTRO DE VENTA ---
+
+        /** Registra una venta por un producto específico (identificado por barcode) */
+        async function registerSale(scannedBarcode) {
+            if (!currentEventId || !currentEvent) {
+                showMessage("Por favor, selecciona un evento primero.", 'error');
+                return;
+            }
+            
+            const product = currentEvent.products[scannedBarcode];
+
+            if (!product || !product.rowIndex) {
+                 showMessage(`Código de barras "${scannedBarcode}" no encontrado en este evento.`, 'error');
+                return;
+            }
+
+            if (product.currentInventory <= 0) {
+                showMessage(`¡Inventario agotado para el producto: ${product.name}!`, 'error');
+                return;
+            }
+
+            const newInventory = product.currentInventory - 1;
+            const priceWithIVA = product.priceWithIVA || 0;
+            const ivaRate = currentEvent.ivaRate;
+            const { priceWithoutIVA, ivaAmount } = calculateIVA(priceWithIVA, ivaRate);
+            
+            const saleData = {
+                productName: product.name,
+                priceTotal: priceWithIVA,
+                priceWithoutIVA: priceWithoutIVA,
+                ivaAmount: ivaAmount,
+            };
+
+            // Llamada al Apps Script
+            google.script.run
+                .withSuccessHandler(response => {
+                    if (response.error) {
+                        showMessage(`Error al registrar la venta: ${response.error}`, 'error');
+                    } else {
+                        showMessage(`Venta registrada: ${product.name} por ${formatCurrency(priceWithIVA)}.`, 'success');
+                        
+                        // Forzamos la recarga de los datos del evento y el historial
+                        loadEventData(currentEventId);
+                    }
+                })
+                .withFailureHandler(e => showMessage(`Error de conexión al registrar venta: ${e}`, 'error'))
+                .registerSale(currentEventId, scannedBarcode, product.rowIndex, newInventory, saleData);
+        }
+
+        // --- MANEJO DE ESCÁNER DE CÓDIGO DE BARRAS (QuaggaJS) ---
+        
+        const scannerModal = document.getElementById('scanner-modal');
+        const openScannerBtn = document.getElementById('open-scanner-btn');
+        const stopScannerBtn = document.getElementById('stop-scanner-btn');
+        const scannerResult = document.getElementById('scanner-result');
+        const scannerPlaceholder = document.getElementById('scanner-placeholder');
+
+        let isScanning = false;
+
+        function startScanner() {
+            if (!currentEventId) {
+                showMessage("Por favor, selecciona un evento primero para escanear.", 'error');
+                return;
+            }
+            if (isScanning) return;
+            
+            scannerModal.classList.remove('hidden');
+            scannerResult.classList.add('hidden');
+            scannerPlaceholder.textContent = "Cargando cámara...";
+
+            if (typeof Quagga === 'undefined') {
+                scannerPlaceholder.textContent = "Error: La librería de escaneo no está cargada.";
+                return;
+            }
+            
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#scanner-container'), 
+                    constraints: {
+                        facingMode: "environment" 
+                    },
+                },
+                decoder: {
+                    readers: [
+                        "ean_reader", 
+                        "ean_8_reader", 
+                        "upc_reader", 
+                        "upc_e_reader" 
+                    ]
+                }
+            }, function (err) {
+                if (err) {
+                    console.error("Error al iniciar Quagga:", err);
+                    scannerPlaceholder.textContent = "Error: No se puede acceder a la cámara. Asegúrate de tener permisos.";
+                    scannerResult.textContent = "Error al iniciar cámara.";
+                    scannerResult.classList.remove('hidden');
+                    isScanning = false;
+                    return;
+                }
+                
+                Quagga.start();
+                isScanning = true;
+                scannerPlaceholder.textContent = "Escaneando, apunta al código de barras...";
+                
+                setTimeout(() => {
+                    scannerPlaceholder.classList.add('hidden');
+                }, 500);
+            });
+            
+            Quagga.onDetected(async function (result) {
+                if (!isScanning) return;
+                
+                const barcode = result.codeResult.code;
+                
+                stopScanner();
+                
+                scannerResult.textContent = `Código detectado: ${barcode}`;
+                scannerResult.classList.remove('hidden');
+
+                if (currentEvent && currentEvent.products[barcode]) {
+                    updateScannedProductDisplay(currentEvent.products[barcode]);
+                    await registerSale(barcode);
+                } else {
+                    showMessage(`Código de barras "${barcode}" no reconocido para este evento.`, 'error');
+                    updateScannedProductDisplay();
+                }
+
+                setTimeout(() => {
+                    scannerModal.classList.add('hidden');
+                    scannerResult.classList.add('hidden');
+                }, 1000);
+            });
+        }
+
+        function stopScanner() {
+            if (isScanning && typeof Quagga !== 'undefined') {
+                Quagga.stop();
+                isScanning = false;
+            }
+            scannerModal.classList.add('hidden');
+            scannerPlaceholder.classList.remove('hidden');
+            scannerPlaceholder.textContent = "Cargando cámara...";
+
+            const video = document.querySelector('#scanner-container video');
+            if (video && video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+        }
+        
+        // --- MANEJO DE LA INTERFAZ y LISTENERS ---
+        
+        /** Muestra la sección de inventario/ventas y oculta el formulario de nuevo evento. */
+        function showSalesSection() {
+            document.getElementById('sales-inventory-section').classList.remove('hidden');
+            document.getElementById('new-event-form-container').classList.add('hidden');
+            document.getElementById('scan-barcode-input').focus();
+        }
+
+        /** Oculta la sección de inventario/ventas. */
+        function hideSalesSection() {
+            document.getElementById('sales-inventory-section').classList.add('hidden');
+            currentEventId = null;
+            currentEvent = null;
+            document.getElementById('current-total-inventory-display').textContent = '--';
+            document.getElementById('event-name-display').textContent = 'Cargando...';
+            document.getElementById('event-history-name').textContent = 'este Evento';
+            document.getElementById('iva-rate-display').textContent = '0%';
+            document.getElementById('sales-history').innerHTML = '<li class="text-gray-500 italic text-sm">No hay ventas registradas aún.</li>';
+        }
+
+
+        window.onload = function() {
+            isReady = true;
+
+            // Eventos del formulario de Nuevo Producto
+            document.getElementById('add-product-btn').addEventListener('click', () => {
+                const name = document.getElementById('product-name').value.trim();
+                const barcode = document.getElementById('product-barcode').value.trim();
+                const initialInventory = parseInt(document.getElementById('initial-inventory').value, 10);
+                const priceWithIVA = parseFloat(document.getElementById('price-with-iva').value);
+                
+                if (!name || !barcode || isNaN(initialInventory) || isNaN(priceWithIVA) || initialInventory <= 0 || priceWithIVA <= 0) {
+                    showMessage("Por favor, completa todos los campos del producto correctamente.", 'error');
+                    return;
+                }
+
+                if (productsToCreate[barcode]) {
+                    showMessage(`El código de barras ${barcode} ya está en la lista. Usa uno único.`, 'error');
+                    return;
+                }
+                
+                productsToCreate[barcode] = { 
+                    name, 
+                    barcode, 
+                    initialInventory, 
+                    priceWithIVA 
+                };
+                
+                // Limpiar campos y refrescar lista
+                document.getElementById('product-name').value = '';
+                document.getElementById('product-barcode').value = '';
+                document.getElementById('initial-inventory').value = '';
+                document.getElementById('price-with-iva').value = '';
+                
+                renderProductList();
+                document.getElementById('product-name').focus();
+            });
+
+
+            // Eventos del formulario principal
+            document.getElementById('new-event-form').addEventListener('submit', handleNewEventSubmit);
+
+            document.getElementById('show-new-event-btn').addEventListener('click', () => {
+                document.getElementById('new-event-form-container').classList.remove('hidden');
+                hideSalesSection();
+                productsToCreate = {}; // Limpiar
+                renderProductList(); 
+            });
+
+            document.getElementById('cancel-new-event-btn').addEventListener('click', () => {
+                document.getElementById('new-event-form-container').classList.add('hidden');
+                productsToCreate = {}; // Limpiar
+                // Si hay un evento seleccionado, volvemos a intentar cargarlo
+                const selectedEvent = document.getElementById('event-select').value;
+                if (selectedEvent) {
+                    loadEventData(selectedEvent);
+                }
+            });
+            
+            document.getElementById('event-select').addEventListener('change', (e) => {
+                const eventId = e.target.value;
+                loadEventData(eventId);
+            });
+
+            // Eventos de Venta Rápida
+            const scanInput = document.getElementById('scan-barcode-input');
+            scanInput.addEventListener('keydown', async (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const scannedBarcode = scanInput.value.trim();
+                    
+                    if (currentEvent && currentEvent.products[scannedBarcode]) {
+                        updateScannedProductDisplay(currentEvent.products[scannedBarcode]);
+                        await registerSale(scannedBarcode);
+                    } else {
+                        showMessage(`Código de barras "${scannedBarcode}" no reconocido para este evento.`, 'error');
+                        updateScannedProductDisplay();
+                    }
+                    scanInput.value = ''; 
+                }
+            });
+            
+            document.getElementById('manual-sell-btn').addEventListener('click', async () => {
+                const scannedBarcode = document.getElementById('scan-barcode-input').value.trim();
+                if (currentEvent && currentEvent.products[scannedBarcode]) {
+                    updateScannedProductDisplay(currentEvent.products[scannedBarcode]);
+                    await registerSale(scannedBarcode);
+                } else {
+                    showMessage(`Código de barras "${scannedBarcode}" no reconocido para este evento.`, 'error');
+                    updateScannedProductDisplay();
+                }
+                document.getElementById('scan-barcode-input').value = '';
+            });
+
+            // Eventos del escáner (QuaggaJS)
+            openScannerBtn.addEventListener('click', () => {
+                 if (!currentEventId) {
+                    showMessage("Por favor, selecciona un evento primero para escanear.", 'error');
+                    return;
+                }
+                startScanner();
+            });
+
+            stopScannerBtn.addEventListener('click', stopScanner);
+
+            // Carga inicial de eventos
+            loadEvents();
+        };
+    </script>
+</body>
+</html>
