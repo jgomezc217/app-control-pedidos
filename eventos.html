@@ -1,811 +1,640 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <base target="_top"> <!-- Necesario para Apps Script -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Ventas de Miel Picante</title>
-    <!-- Carga de Tailwind CSS -->
+    <title>🌶️ Miel Picante - Control de Evento</title>
+    <!-- Incluir Tailwind CSS para estilos modernos y responsivos -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Carga de QuaggaJS para escaneo de código de barras por cámara -->
-    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+    <!-- Configuración de Fuentes y Estilos Base de Tailwind -->
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        'honey-gold': '#FFC300',
-                        'chili-red': '#E94F37',
-                        'dark-slate': '#1E293B',
+                        'honey': '#F9C74F',
+                        'chili': '#E63946',
+                        // Se elimina 'dark-bg' ya que usaremos blanco
+                        'light-bg': '#F8F8F8', // Gris muy claro para minimalismo
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
-                    },
+                    }
                 }
             }
         }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        .scroll-container {
-            max-height: 50vh;
-            overflow-y: auto;
-            -ms-overflow-style: none; /* IE and Edge */
-            scrollbar-width: none; /* Firefox */
+        /* Estilos personalizados para la interfaz */
+        body {
+            /* Fondo blanco minimalista */
+            background-color: white; 
+            font-family: 'Inter', sans-serif;
         }
-        .scroll-container::-webkit-scrollbar {
-            display: none; /* Chrome, Safari, Opera */
+        .card {
+            /* Sombra más sutil para un look minimalista */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+            transition: transform 0.2s;
+            border: 1px solid #E5E7EB; /* Borde sutil */
         }
-        /* Estilos específicos para el feed de la cámara de QuaggaJS */
-        #scanner-container video {
-            width: 100%;
-            height: 100%;
+        .card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
         }
-        #scanner-container canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
+        /* Botones de acento mantienen los colores de miel y chile */
+        .btn-honey {
+            background-color: #F9C74F;
+            color: #1F2937; /* Texto oscuro */
+            border: none;
+            transition: background-color 0.15s;
         }
+        .btn-honey:hover {
+            background-color: #FBBF24;
+        }
+        .btn-chili {
+            background-color: #E63946;
+            color: white;
+            border: none;
+            transition: background-color 0.15s;
+        }
+        .btn-chili:hover {
+            background-color: #CF1B28;
+        }
+        /* Estilos de input minimalistas */
+        input[type=text], input[type=number], input[type=date] {
+            border: 1px solid #D1D5DB; 
+        }
+        input[type=text]:focus, input[type=number]:focus, input[type=date]:focus {
+            outline: none;
+            border-color: #F9C74F;
+            box-shadow: 0 0 0 1px #F9C74F;
+        }
+        
+        /* Oculta la flecha de los inputs numéricos */
+        input[type=number]::-webkit-outer-spin-button,
+        input[type=number]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
     </style>
 </head>
-<body class="bg-gray-100 font-sans min-h-screen p-4 sm:p-8">
-    
-    <div id="app" class="max-w-4xl mx-auto bg-white shadow-2xl rounded-xl p-6 sm:p-8">
-        <header class="mb-8">
-            <h1 class="text-4xl font-bold text-dark-slate mb-2 flex items-center">
-                <span class="mr-3 text-honey-gold text-5xl">🌶️</span> Gestión de Miel Picante
-            </h1>
-            <p class="text-gray-500">Sistema de Inventario y Ventas por Evento (Google Sheets Backend)</p>
-        </header>
+<!-- Fondo blanco y texto oscuro -->
+<body class="min-h-screen p-4 sm:p-6 bg-white text-gray-800">
 
-        <!-- Mensajes del Sistema -->
-        <div id="message-container" class="mb-4 hidden">
-            <div id="message-box" class="p-3 rounded-lg font-medium"></div>
+    <header class="text-center py-4 mb-6 border-b border-gray-200">
+        <!-- Título principal ahora en gris oscuro (text-gray-900) -->
+        <h1 class="text-3xl font-extrabold text-gray-900 flex items-center justify-center">
+            <!-- Icono sigue usando el color del texto (currentColor) -->
+            <svg class="w-8 h-8 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 12h-2v-4h2v4zm0-6H9V6h2v2z" clip-rule="evenodd" fill-rule="evenodd"></path></svg>
+            Control de Venta e Inventario
+        </h1>
+        <p class="text-sm text-gray-600 mt-1">Usuario ID: <span id="user-id">Cargando...</span></p>
+    </header>
+
+    <main id="app-container" class="max-w-4xl mx-auto">
+        <!-- Contenedor para el estado de la aplicación -->
+        <div id="loader" class="text-center p-8">
+            <!-- Spinner en gris oscuro (text-gray-900) -->
+            <svg class="animate-spin h-8 w-8 text-gray-900 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-4 text-gray-700">Conectando a la base de datos...</p>
         </div>
 
-        <!-- Sección de Selección de Evento -->
-        <div class="mb-8 p-5 bg-honey-gold/10 rounded-lg shadow-inner">
-            <h2 class="text-2xl font-semibold text-dark-slate mb-3">1. Seleccionar Evento Actual</h2>
-            <div id="event-selector-container" class="flex flex-col sm:flex-row sm:space-x-4">
-                <select id="event-select" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-chili-red focus:border-chili-red transition duration-150 bg-white shadow-sm">
-                    <option value="">-- Selecciona un Evento --</option>
-                </select>
-                <button id="show-new-event-btn" class="mt-3 sm:mt-0 p-3 bg-chili-red text-white font-semibold rounded-lg hover:bg-chili-red/90 transition duration-200 shadow-md flex-shrink-0">
-                    + Nuevo Evento
-                </button>
-            </div>
-            <!-- USER ID no es necesario ya que el Apps Script lo obtiene automáticamente -->
-            <p id="user-id-display" class="mt-2 text-xs text-gray-500 hidden">Usuario ID: <span id="current-user-id">Apps Script</span></p> 
-        </div>
+        <!-- Contenedores de las dos Vistas -->
+        <div id="setup-view" class="hidden"></div>
+        <div id="sales-view" class="hidden"></div>
 
-        <!-- Formulario para Crear Nuevo Evento (Inicialmente oculto) -->
-        <div id="new-event-form-container" class="hidden mb-8 p-6 bg-dark-slate/5 rounded-xl shadow-md">
-            <h2 class="text-2xl font-semibold text-dark-slate mb-4 border-b pb-2">Crear Nuevo Evento</h2>
-            <form id="new-event-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- Campos del Evento -->
-                <input type="text" id="event-name" placeholder="Nombre del Evento (Ej: Feria Guadalajara)" required class="col-span-3 p-3 border rounded-lg">
-                <input type="text" id="event-location" placeholder="Lugar del Evento" required class="col-span-2 p-3 border rounded-lg">
-                <select id="iva-rate" class="p-3 border rounded-lg" required>
-                    <option value="" disabled>Tasa de IVA del Evento</option>
-                    <option value="0.00">0% (Sin IVA)</option>
-                    <option value="0.16" selected>16% (Tasa Común)</option>
-                    <option value="0.08">8% (Tasa Reducida)</option>
-                </select>
+        <!-- Mensajes del sistema (Error, Éxito) -->
+        <div id="message-container" class="fixed bottom-4 right-4 z-50"></div>
+    </main>
 
-                <!-- Sección de Productos -->
-                <div class="col-span-3 mt-4">
-                    <h3 class="text-xl font-semibold mb-3 border-t pt-3">2. Definir Productos y Stock</h3>
-                    
-                    <!-- Formulario de Producto Individual -->
-                    <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-white p-4 rounded-lg shadow-inner mb-3 border">
-                        <input type="text" id="product-name" placeholder="Nombre Producto" class="col-span-1 p-2 border rounded-lg" required>
-                        <input type="text" id="product-barcode" placeholder="Código de Barras (Único)" class="col-span-1 p-2 border rounded-lg">
-                        <input type="number" id="initial-inventory" placeholder="Inventario" required min="1" class="col-span-1 p-2 border rounded-lg">
-                        <input type="number" id="price-with-iva" placeholder="Precio con IVA ($)" required min="0.01" step="0.01" class="col-span-1 p-2 border rounded-lg">
-                        <button type="button" id="add-product-btn" class="col-span-1 p-2 bg-honey-gold text-dark-slate font-semibold rounded-lg hover:bg-honey-gold/90 transition duration-200 shadow-sm">
-                            Añadir Producto
-                        </button>
-                    </div>
+    <!-- Scripts de Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-                    <!-- Lista de Productos Añadidos -->
-                    <div class="bg-white rounded-lg shadow-md mt-4 p-4">
-                        <h4 class="font-medium text-lg mb-2">Productos a Incluir:</h4>
-                        <ul id="products-to-add-list" class="space-y-2">
-                            <li class="text-gray-500 italic text-sm">Usa el botón "Añadir Producto" de arriba para listar tus productos (mínimo 1).</li>
-                        </ul>
-                    </div>
-                </div>
+        // Establece el nivel de registro a Debug
+        setLogLevel('Debug');
 
-                <!-- Botones Finales del Evento -->
-                <div class="col-span-3 flex justify-end space-x-3 mt-4">
-                    <button type="button" id="cancel-new-event-btn" class="p-3 bg-gray-400 text-white font-semibold rounded-lg hover:bg-gray-500 transition duration-200">Cancelar</button>
-                    <button type="submit" id="save-event-btn" class="p-3 bg-chili-red text-white font-semibold rounded-lg hover:bg-chili-red/90 transition duration-200 shadow-md disabled:opacity-50" disabled>
-                        Guardar Evento
-                    </button>
-                </div>
-            </form>
-        </div>
+        // Variables Globales del Entorno (MANDATORIAS)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'spicy-honey-app';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        <!-- Sección de Venta e Inventario (Inicialmente inactivo) -->
-        <div id="sales-inventory-section" class="hidden">
-            <div class="grid md:grid-cols-3 gap-6 mb-8">
-                <!-- Tarjeta de Inventario Total -->
-                <div class="md:col-span-1 p-6 bg-dark-slate text-white rounded-xl shadow-lg">
-                    <p class="text-sm uppercase opacity-75">Inventario Total Evento</p>
-                    <div class="text-5xl font-extrabold mt-1" id="current-total-inventory-display">--</div>
-                    <p class="text-lg mt-2 font-medium" id="event-name-display">Cargando...</p>
-                </div>
-                <!-- Tarjeta de Producto Escaneado -->
-                <div class="md:col-span-2 grid grid-cols-2 gap-4">
-                    <div class="p-4 bg-honey-gold/70 text-dark-slate rounded-xl shadow-lg">
-                        <p class="text-sm uppercase font-semibold">Producto Escaneado</p>
-                        <div class="text-xl font-bold mt-1" id="scanned-product-name">---</div>
-                        <p class="text-sm mt-1">Stock Específico: <span id="scanned-product-inventory">--</span></p>
-                        <p class="text-xs opacity-80">Barcode: <span id="scanned-barcode-display">--</span></p>
-                    </div>
-                    <div class="p-4 bg-chili-red text-white rounded-xl shadow-lg">
-                        <p class="text-sm uppercase opacity-75">Precio de Venta (Con IVA)</p>
-                        <div class="text-3xl font-extrabold mt-1" id="price-with-iva-display">$0.00</div>
-                        <p class="text-sm mt-1 opacity-75" id="price-no-iva-info">Sin IVA: $0.00 | IVA: <span id="iva-rate-display">0%</span></p>
-                    </div>
-                </div>
-            </div>
+        let db;
+        let auth;
+        let userId = null;
+        let isAuthReady = false;
+        let activeEventId = null;
+        let currentEventData = null;
+        let salesCart = [];
 
-            <!-- Registro de Venta Rápida por Barcode -->
-            <div class="mb-8 p-6 bg-chili-red/10 rounded-xl shadow-inner">
-                <h3 class="text-xl font-semibold text-dark-slate mb-3 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-chili-red" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-7-9a1 1 0 112 0v4a1 1 0 11-2 0V9zm4-1a1 1 0 100 2h6a1 1 0 100-2H7zm-3 8a1 1 0 102 0v-4a1 1 0 10-2 0v4zm7 0a1 1 0 102 0v-6a1 1 0 10-2 0v6zm4 0a1 1 0 102 0v-8a1 1 0 10-2 0v8z" clip-rule="evenodd" />
-                    </svg>
-                    Registro de Venta
-                </h3>
-                <div class="flex space-x-2">
-                    <!-- Input Manual -->
-                    <input type="text" id="scan-barcode-input" placeholder="Ingresa el código manualmente y ENTER" class="flex-grow p-4 text-lg border-2 border-chili-red rounded-lg focus:ring-chili-red focus:border-chili-red transition duration-150 shadow-md">
-                    <!-- Botón para Abrir Escáner -->
-                    <button id="open-scanner-btn" class="p-4 bg-honey-gold text-dark-slate font-semibold rounded-lg hover:bg-honey-gold/90 transition duration-200 shadow-md flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664.89l1.455.513c.725.254 1.488.397 2.271.397.783 0 1.546-.143 2.271-.397l1.455-.513A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                    </button>
-                </div>
-                <button id="manual-sell-btn" class="mt-3 w-full p-3 bg-chili-red text-white font-semibold rounded-lg hover:bg-chili-red/90 transition duration-200 shadow-md">
-                    Registrar Venta (Código Manual en Input)
-                </button>
-            </div>
+        const PRODUCT_LEVELS = ["Bajo", "Medio", "Alto"];
 
-            <!-- Historial de Ventas -->
-            <div class="p-6 bg-gray-50 rounded-xl shadow-md">
-                <h3 class="text-xl font-semibold text-dark-slate mb-3">Historial de Ventas de <span id="event-history-name">este Evento</span></h3>
-                <div class="scroll-container">
-                    <ul id="sales-history" class="space-y-2">
-                        <li class="text-gray-500 italic text-sm">Cargando historial...</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
+        // --- Utilidades de Interfaz de Usuario ---
+        const $ = selector => document.querySelector(selector);
+        const $id = id => document.getElementById(id);
 
-    <!-- Modal de Escaneo con Cámara (Inicialmente Oculto) -->
-    <div id="scanner-modal" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl">
-            <h3 class="text-xl font-bold text-dark-slate mb-4">Escanear Producto con Cámara</h3>
-            <!-- El contenedor de QuaggaJS -->
-            <div id="scanner-container" class="relative w-full h-64 border-4 border-chili-red/50 rounded-lg overflow-hidden mb-4 bg-gray-900">
-                <div id="scanner-placeholder" class="absolute inset-0 flex items-center justify-center text-gray-300 font-medium">Cargando cámara...</div>
-            </div>
-            <p id="scanner-result" class="text-center text-chili-red font-semibold mb-4 hidden"></p>
-            <button id="stop-scanner-btn" class="w-full p-3 bg-gray-400 text-white font-semibold rounded-lg hover:bg-gray-500 transition duration-200">
-                Cerrar Escáner
-            </button>
-        </div>
-    </div>
-
-    <!-- Script de Lógica de la Aplicación -->
-    <script>
-        // Variables Globales de la Aplicación
-        let currentEventId = null;
-        let currentEvent = null; 
-        let isReady = false;
-        
-        let productsToCreate = {}; // { barcode: {name, initialInventory, priceWithIVA} }
-
-        // --- UTILIDADES ---
-
-        /** Muestra un mensaje temporal en la interfaz */
+        /** Muestra un mensaje temporal (éxito/error) en la esquina inferior. */
         function showMessage(text, type = 'success') {
-            const container = document.getElementById('message-container');
-            const box = document.getElementById('message-box');
-            
-            container.classList.remove('hidden');
-            box.textContent = text;
-            
-            box.classList.remove('bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800', 'bg-blue-100', 'text-blue-800');
-            if (type === 'success') {
-                box.classList.add('bg-green-100', 'text-green-800');
-            } else if (type === 'error') {
-                box.classList.add('bg-red-100', 'text-red-800');
-            } else {
-                box.classList.add('bg-blue-100', 'text-blue-800');
-            }
+            const container = $id('message-container');
+            const color = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `p-3 rounded-lg shadow-xl text-white font-semibold mb-2 ${color} transition transform duration-300`;
+            messageDiv.textContent = text;
+
+            container.appendChild(messageDiv);
 
             setTimeout(() => {
-                container.classList.add('hidden');
-            }, 5000);
+                messageDiv.classList.add('opacity-0', 'translate-x-full');
+                messageDiv.addEventListener('transitionend', () => messageDiv.remove());
+            }, 3000);
         }
 
-        /** Formatea un número como moneda. */
-        function formatCurrency(amount) {
-            const num = parseFloat(amount);
-            if (isNaN(num)) return '$0.00';
-            return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(num);
-        }
+        /** Formatea un número a moneda. */
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('es-SV', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 2,
+            }).format(amount);
+        };
+
+        // --- Funciones de Firestore ---
+
+        /** Obtiene la ruta de la colección privada del usuario */
+        const getUserCollectionPath = (collectionName) => {
+            return `/artifacts/${appId}/users/${userId}/${collectionName}`;
+        };
 
         /**
-         * Calcula la separación de IVA.
-         * @param {number} priceWithIVA Precio total.
-         * @param {number} ivaRate Tasa de IVA (ej: 0.16).
-         * @returns {{priceWithoutIVA: number, ivaAmount: number}}
+         * Intenta cargar el evento activo para el día de hoy.
+         * Si no existe, prepara la vista de configuración.
          */
-        function calculateIVA(priceWithIVA, ivaRate) {
-            const rate = parseFloat(ivaRate);
-            if (rate === 0 || isNaN(rate)) {
-                 return { priceWithoutIVA: priceWithIVA, ivaAmount: 0 };
-            }
-            const priceWithoutIVA = priceWithIVA / (1 + rate);
-            const ivaAmount = priceWithIVA - priceWithoutIVA;
-            
-            return {
-                priceWithoutIVA: Math.round(priceWithoutIVA * 100) / 100, 
-                ivaAmount: Math.round(ivaAmount * 100) / 100
-            };
-        }
-        
-        // --- MANEJO DE EVENTOS (Apps Script Calls) ---
+        async function loadActiveEvent() {
+            if (!isAuthReady || !userId) return;
 
-        /** Carga todos los eventos disponibles y llena el select. */
-        function loadEvents() {
-            if (!isReady) return;
-            document.getElementById('event-select').disabled = true;
+            const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+            const eventsColRef = collection(db, getUserCollectionPath('events'));
+            // Buscamos un evento activo cuya fecha de inicio sea hoy.
+            const q = query(eventsColRef, where("startDate", "==", today), where("status", "==", "Active"));
 
-            google.script.run
-                .withSuccessHandler(renderEvents)
-                .withFailureHandler(e => showMessage("Error al cargar eventos: " + e, 'error'))
-                .getEvents();
-        }
+            try {
+                const querySnapshot = await getDocs(q);
 
-        /** Renderiza la lista de eventos en el selector. */
-        function renderEvents(events) {
-            document.getElementById('event-select').disabled = false;
-            if (events.error) {
-                showMessage("Error en el servidor al cargar eventos: " + events.error, 'error');
-                return;
-            }
+                if (querySnapshot.empty) {
+                    activeEventId = null;
+                    currentEventData = null;
+                    renderSetupView(today);
+                    showMessage("No hay evento activo para hoy. Por favor, configura el inventario.", 'info');
+                } else {
+                    const docSnap = querySnapshot.docs[0];
+                    activeEventId = docSnap.id;
+                    currentEventData = docSnap.data();
 
-            const eventSelect = document.getElementById('event-select');
-            eventSelect.innerHTML = '<option value="">-- Selecciona un Evento --</option>';
-            
-            if (events && events.length > 0) {
-                events.forEach(event => {
-                    const option = document.createElement('option');
-                    option.value = event.id;
-                    option.textContent = `${event.name} (${event.location}) - Inv Total: ${event.totalInventory}`;
-                    option.dataset.ivaRate = event.ivaRate; 
-                    eventSelect.appendChild(option);
-                });
-            }
-
-            if (currentEventId && eventSelect.querySelector(`option[value="${currentEventId}"]`)) {
-                 eventSelect.value = currentEventId;
-            } else {
-                 hideSalesSection();
-            }
-        }
-        
-        /** Carga los datos de un evento seleccionado y actualiza la UI. */
-        function loadEventData(eventId) {
-            if (!eventId) {
-                 hideSalesSection();
-                 return;
-            }
-            currentEventId = eventId;
-            showSalesSection();
-
-            google.script.run
-                .withSuccessHandler(handleEventDataLoad)
-                .withFailureHandler(e => showMessage("Error al cargar los datos del evento: " + e, 'error'))
-                .loadEventData(eventId);
-        }
-
-        /** Maneja la respuesta de loadEventData */
-        function handleEventDataLoad(eventData) {
-            if (eventData.error) {
-                showMessage("Error al cargar evento: " + eventData.error, 'error');
-                hideSalesSection();
-                return;
-            }
-            
-            currentEvent = eventData;
-            
-            // 1. Calcular y mostrar Inventario Total
-            const totalInventory = Object.values(currentEvent.products || {}).reduce((sum, p) => sum + p.currentInventory, 0);
-            document.getElementById('current-total-inventory-display').textContent = totalInventory;
-            document.getElementById('event-name-display').textContent = currentEvent.name;
-            document.getElementById('event-history-name').textContent = currentEvent.name;
-            document.getElementById('iva-rate-display').textContent = `${(currentEvent.ivaRate * 100).toFixed(0)}%`;
-
-            // 2. Resetear datos del producto escaneado
-            updateScannedProductDisplay();
-
-            // 3. Cargar historial de ventas
-            loadSalesHistory(currentEvent.id);
-        }
-
-        /** Carga el historial de ventas del evento seleccionado. */
-        function loadSalesHistory(eventId) {
-            google.script.run
-                .withSuccessHandler(renderSalesHistory)
-                .withFailureHandler(e => showMessage("Error al cargar historial de ventas: " + e, 'error'))
-                .getSalesHistory(eventId);
-        }
-
-        /** Renderiza la lista de transacciones. */
-        function renderSalesHistory(sales) {
-            const salesHistoryUl = document.getElementById('sales-history');
-            salesHistoryUl.innerHTML = '';
-            
-            if (sales.error) {
-                salesHistoryUl.innerHTML = '<li class="text-red-500 italic text-sm">Error al cargar historial.</li>';
-                showMessage("Error al cargar historial de ventas: " + sales.error, 'error');
-                return;
-            }
-
-            if (!sales || sales.length === 0) {
-                salesHistoryUl.innerHTML = '<li class="text-gray-500 italic text-sm">No hay ventas registradas aún.</li>';
-                return;
-            }
-            
-            sales.forEach(sale => {
-                const { productName, productBarcode, priceTotal, priceWithoutIVA, ivaAmount, timestamp } = sale;
-                const li = document.createElement('li');
-                li.className = 'p-3 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col sm:flex-row sm:justify-between items-start sm:items-center text-sm';
-                
-                let time = '';
-                try {
-                    time = new Date(timestamp).toLocaleTimeString('es-MX', {hour: '2-digit', minute:'2-digit'});
-                } catch (e) {
-                    time = 'Hora desconocida';
+                    // Establece el listener en tiempo real
+                    setupRealtimeListener(activeEventId);
                 }
-                
-                li.innerHTML = `
-                    <div class="mb-1 sm:mb-0">
-                        <span class="font-bold text-dark-slate">${formatCurrency(priceTotal)}</span> - 
-                        <span class="text-chili-red font-medium">${productName}</span> 
-                        <span class="text-gray-400 text-xs ml-2">(${productBarcode})</span>
-                        <span class="text-gray-500 block sm:inline ml-0 sm:ml-4 text-xs">(${formatCurrency(priceWithoutIVA)} s/IVA, ${formatCurrency(ivaAmount)} IVA)</span>
-                    </div>
-                    <span class="text-xs text-gray-400 flex-shrink-0">${time}</span>
-                `;
-                salesHistoryUl.appendChild(li);
-            });
-        }
-
-
-        // --- UI UTILITIES ---
-
-        /** Actualiza las tarjetas de visualización del producto escaneado (o las resetea). */
-        function updateScannedProductDisplay(product = null) {
-            const nameDisplay = document.getElementById('scanned-product-name');
-            const inventoryDisplay = document.getElementById('scanned-product-inventory');
-            const barcodeDisplay = document.getElementById('scanned-barcode-display');
-            const priceDisplay = document.getElementById('price-with-iva-display');
-            const priceNoIvaInfo = document.getElementById('price-no-iva-info');
-            const ivaRateDisplay = document.getElementById('iva-rate-display');
-
-            if (product) {
-                const ivaRateText = ivaRateDisplay.textContent.replace('%', '');
-                const ivaRate = parseFloat(ivaRateText) / 100;
-                const { priceWithoutIVA } = calculateIVA(product.priceWithIVA, ivaRate);
-
-                nameDisplay.textContent = product.name;
-                inventoryDisplay.textContent = product.currentInventory;
-                barcodeDisplay.textContent = product.barcode;
-                priceDisplay.textContent = formatCurrency(product.priceWithIVA);
-                priceNoIvaInfo.innerHTML = `Sin IVA: ${formatCurrency(priceWithoutIVA)} | IVA: ${ivaRateDisplay.textContent}`;
-            } else {
-                nameDisplay.textContent = '---';
-                inventoryDisplay.textContent = '--';
-                barcodeDisplay.textContent = '--';
-                priceDisplay.textContent = '$0.00';
+            } catch (error) {
+                console.error("Error cargando evento activo:", error);
+                showMessage("Error al cargar el evento: " + error.message, 'error');
+                renderSetupView(today); // Fallback a configuración
             }
         }
 
-        // --- MANEJO DE PRODUCTOS EN EL FORMULARIO DE NUEVO EVENTO ---
+        /** Configura el listener en tiempo real para el evento activo. */
+        function setupRealtimeListener(eventId) {
+            const eventDocRef = doc(db, getUserCollectionPath('events'), eventId);
 
-        /** Renderiza la lista de productos temporales */
-        function renderProductList() {
-            const list = document.getElementById('products-to-add-list');
-            list.innerHTML = '';
-            
-            const productKeys = Object.keys(productsToCreate);
-            
-            if (productKeys.length === 0) {
-                list.innerHTML = '<li class="text-gray-500 italic text-sm">Usa el botón "Añadir Producto" de arriba para listar tus productos (mínimo 1).</li>';
-                document.getElementById('save-event-btn').disabled = true;
+            onSnapshot(eventDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    currentEventData = docSnap.data();
+                    renderSalesView(); // Redibuja la vista de ventas con los datos actualizados
+                    showMessage(`Inventario actualizado en tiempo real.`, 'success');
+                } else {
+                    showMessage("El evento activo ha sido eliminado. Redirigiendo a configuración.", 'error');
+                    loadActiveEvent(); // Recarga para ir a configuración
+                }
+            }, (error) => {
+                console.error("Error en listener de Firestore:", error);
+                showMessage("Error de conexión en tiempo real: " + error.message, 'error');
+            });
+
+            // Oculta el loader
+            $id('loader').classList.add('hidden');
+        }
+
+        // --- Vistas y Renderizado ---
+
+        /** Renderiza la Vista de Configuración del Evento (Requisito 1 & 2) */
+        function renderSetupView(defaultDate) {
+            $id('setup-view').classList.remove('hidden');
+            $id('sales-view').classList.add('hidden');
+
+            const html = `
+                <!-- Tarjeta principal minimalista (Fondo blanco, borde y sombra sutil) -->
+                <div class="card bg-white p-6 rounded-xl"> 
+                    <!-- Título en gris oscuro -->
+                    <h2 class="text-xl font-bold mb-4 text-gray-900">Configuración de Nuevo Evento</h2>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <label class="block">
+                            <span class="text-sm text-gray-600">Fecha de Inicio</span>
+                            <input type="date" id="event-start-date" value="${defaultDate}" class="w-full p-3 mt-1 rounded-lg bg-white text-gray-800 focus:ring-honey focus:border-honey" required>
+                        </label>
+                        <label class="block">
+                            <span class="text-sm text-gray-600">Fecha de Fin</span>
+                            <input type="date" id="event-end-date" value="${defaultDate}" class="w-full p-3 mt-1 rounded-lg bg-white text-gray-800 focus:ring-honey focus:border-honey" required>
+                        </label>
+                    </div>
+
+                    <div id="product-forms" class="space-y-4">
+                        ${PRODUCT_LEVELS.map(level => `
+                            <!-- Tarjetas de producto en gris muy claro -->
+                            <div class="p-4 bg-gray-50 rounded-lg border border-gray-200"> 
+                                <!-- Subtítulo en gris oscuro -->
+                                <h3 class="font-semibold text-lg text-gray-900 mb-2">Nivel Picante: ${level}</h3>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <label class="block">
+                                        <span class="text-sm text-gray-600">Precio ($)</span>
+                                        <input type="number" step="0.01" min="0.01" id="price-${level}" placeholder="Ej: 15.00" class="w-full mt-1 p-2 rounded-lg bg-white text-gray-800" required>
+                                    </label>
+                                    <label class="block">
+                                        <span class="text-sm text-gray-600">Inventario Inicial</span>
+                                        <input type="number" min="1" id="inv-${level}" placeholder="Ej: 50" class="w-full mt-1 p-2 rounded-lg bg-white text-gray-800" required>
+                                    </label>
+                                </div>
+                                <label class="block mt-4">
+                                    <span class="text-sm text-gray-600">Código de Barras (EAN/UPC)</span>
+                                    <input type="text" id="barcode-${level}" placeholder="Ej: 1000${level.slice(0,1).toUpperCase()}" class="w-full mt-1 p-2 rounded-lg bg-white text-gray-800" required>
+                                </label>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button id="save-event-btn" class="btn-chili w-full mt-6 py-3 rounded-lg font-bold">
+                        <svg class="animate-spin h-5 w-5 mr-3 hidden" id="setup-spinner" viewBox="0 0 24 24"></svg>
+                        Iniciar Evento de Venta
+                    </button>
+                </div>
+            `;
+            $id('setup-view').innerHTML = html;
+            $id('save-event-btn').addEventListener('click', saveEventConfiguration);
+            $id('loader').classList.add('hidden');
+        }
+
+        /** Guarda la configuración del evento en Firestore. */
+        async function saveEventConfiguration() {
+            const btn = $id('save-event-btn');
+            const spinner = $id('setup-spinner');
+            btn.disabled = true;
+            spinner.classList.remove('hidden');
+            btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-3 mx-auto" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Guardando...`;
+
+            const startDate = $id('event-start-date').value;
+            const endDate = $id('event-end-date').value;
+
+            if (!startDate || !endDate) {
+                showMessage("Debe seleccionar las fechas de inicio y fin.", 'error');
+                btn.disabled = false;
+                btn.innerHTML = 'Iniciar Evento de Venta';
                 return;
             }
 
-            document.getElementById('save-event-btn').disabled = false;
+            if (new Date(startDate) > new Date(endDate)) {
+                showMessage("La fecha de fin no puede ser anterior a la fecha de inicio.", 'error');
+                btn.disabled = false;
+                btn.innerHTML = 'Iniciar Evento de Venta';
+                return;
+            }
 
-            productKeys.forEach(barcode => {
-                const product = productsToCreate[barcode];
-                const ivaRate = parseFloat(document.getElementById('iva-rate').value);
-                const { priceWithoutIVA } = calculateIVA(product.priceWithIVA, ivaRate);
+            const eventData = {
+                eventName: `Venta en Mercado (${startDate} a ${endDate})`,
+                startDate: startDate, // Guardamos la fecha de inicio
+                endDate: endDate,     // Guardamos la fecha de fin
+                dateCreated: new Date(),
+                userId: userId,
+                status: "Active",
+                products: {},
+                salesLog: []
+            };
 
-                const li = document.createElement('li');
-                li.className = 'p-3 bg-gray-100 rounded-lg flex justify-between items-center border border-honey-gold/50 text-dark-slate';
-                
-                li.innerHTML = `
-                    <div class="flex-grow">
-                        <span class="font-bold">${product.name}</span> 
-                        <span class="text-xs text-gray-500 ml-2">(SKU: ${product.barcode})</span>
-                        <div class="text-sm">
-                            Stock: ${product.initialInventory} | Precio: ${formatCurrency(product.priceWithIVA)} 
-                            <span class="text-xs text-gray-500">(${formatCurrency(priceWithoutIVA)} s/IVA)</span>
+            let barcodes = new Set();
+            let allValid = true;
+
+            PRODUCT_LEVELS.forEach(level => {
+                const price = parseFloat($id(`price-${level}`).value);
+                const inventory = parseInt($id(`inv-${level}`).value, 10);
+                const barcode = $id(`barcode-${level}`).value.trim();
+
+                if (isNaN(price) || price <= 0 || isNaN(inventory) || inventory < 1 || !barcode) {
+                    allValid = false;
+                    return;
+                }
+
+                if (barcodes.has(barcode)) {
+                    allValid = false;
+                    showMessage("Los códigos de barras deben ser únicos.", 'error');
+                    return;
+                }
+                barcodes.add(barcode);
+
+                eventData.products[level] = {
+                    price: price,
+                    startingInventory: inventory,
+                    currentInventory: inventory, // Inventario inicial y actual son iguales
+                    barcode: barcode
+                };
+            });
+
+            if (!allValid) {
+                showMessage("Por favor, complete todos los campos de precios, inventario y códigos de barras correctamente.", 'error');
+                btn.disabled = false;
+                btn.innerHTML = 'Iniciar Evento de Venta';
+                return;
+            }
+
+            try {
+                // Primero, desactivar cualquier evento activo anterior para hoy.
+                const eventsColRef = collection(db, getUserCollectionPath('events'));
+                // La búsqueda de un evento activo se basa en la fecha de inicio de hoy
+                const q = query(eventsColRef, where("startDate", "==", startDate), where("status", "==", "Active"));
+                const activeEventsSnapshot = await getDocs(q);
+                activeEventsSnapshot.forEach(async (doc) => {
+                    await updateDoc(doc.ref, { status: "Archived" });
+                });
+
+                // Luego, crea el nuevo documento de evento.
+                const newEventRef = doc(eventsColRef);
+                await setDoc(newEventRef, eventData);
+                activeEventId = newEventRef.id;
+
+                showMessage("✅ Evento iniciado y configuración guardada con éxito!", 'success');
+                // Esto desencadenará el listener y la renderización de la vista de ventas
+                setupRealtimeListener(activeEventId);
+            } catch (error) {
+                console.error("Error al guardar la configuración:", error);
+                showMessage("❌ Error al guardar: " + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                spinner.classList.add('hidden');
+            }
+        }
+
+        /** Renderiza la Vista de Ventas (Requisito 3) */
+        function renderSalesView() {
+            if (!currentEventData) return;
+
+            $id('setup-view').classList.add('hidden');
+            $id('sales-view').classList.remove('hidden');
+
+            const inventoryHtml = PRODUCT_LEVELS.map(level => {
+                const p = currentEventData.products[level] || {};
+                // El inventario saludable ahora usa text-gray-700
+                const inventoryClass = p.currentInventory < p.startingInventory * 0.2 ? 'text-chili font-extrabold' : 'text-gray-700'; 
+                return `
+                    <!-- Tarjeta de inventario en gris muy claro -->
+                    <div class="p-3 bg-gray-50 rounded-lg flex justify-between items-center border border-gray-200">
+                        <div>
+                            <p class="font-semibold text-gray-800">${level} Picante</p>
+                            <p class="text-xs text-gray-600">Precio: ${formatCurrency(p.price || 0)}</p>
+                            <p class="text-xs text-gray-600">Cód: ${p.barcode || 'N/A'}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm text-gray-600">Inv. Disp:</p>
+                            <!-- Color del número de inventario -->
+                            <p class="text-2xl ${inventoryClass}">${p.currentInventory || 0}</p>
                         </div>
                     </div>
-                    <button data-barcode="${barcode}" class="remove-product-btn p-1 ml-3 text-chili-red hover:text-red-700 transition duration-150">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
                 `;
-                list.appendChild(li);
-            });
-            
-            // Asignar listeners a los botones de eliminar
-            document.querySelectorAll('.remove-product-btn').forEach(button => {
-                button.addEventListener('click', (e) => {
-                    const barcodeToRemove = e.currentTarget.dataset.barcode;
-                    delete productsToCreate[barcodeToRemove];
-                    renderProductList();
-                });
+            }).join('');
+
+            const cartTotal = salesCart.reduce((sum, item) => sum + item.price, 0);
+            const cartHtml = salesCart.map((item, index) => `
+                <li class="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
+                    <span class="text-gray-800">${item.level} Picante (${formatCurrency(item.price)})</span>
+                    <button data-index="${index}" class="remove-from-cart text-sm text-chili hover:text-red-400 font-semibold transition">
+                        Eliminar
+                    </button>
+                </li>
+            `).join('');
+
+            const viewHtml = `
+                <!-- Título del evento en gris oscuro -->
+                <h2 class="text-2xl font-bold mb-4 text-center text-gray-900">${currentEventData.eventName}</h2>
+
+                <!-- Sección de Inventario -->
+                <div class="grid sm:grid-cols-3 gap-4 mb-8">
+                    ${inventoryHtml}
+                </div>
+
+                <!-- Sección de Escaneo (Fondo blanco) -->
+                <div class="card bg-white p-6 rounded-xl mb-8">
+                    <!-- Título de sección en gris oscuro -->
+                    <h3 class="text-xl font-bold mb-3 text-gray-900">Escanear Producto</h3>
+                    <p class="text-sm text-gray-600 mb-4">Escanea el código de barras o ingrésalo manualmente y presiona Enter.</p>
+                    <input type="text" id="barcode-input" placeholder="Escanear Código Aquí..." autofocus
+                           class="w-full p-4 text-xl rounded-lg bg-white border-2 border-gray-300 text-gray-800 focus:ring-honey focus:border-honey transition">
+                </div>
+
+                <!-- Carrito de Compras (Fondo blanco) -->
+                <div class="card bg-white p-6 rounded-xl">
+                    <!-- Título de carrito en gris oscuro -->
+                    <h3 class="text-xl font-bold mb-4 text-gray-900 flex justify-between items-center">
+                        Carrito Actual
+                        <span class="text-2xl text-chili font-extrabold">${formatCurrency(cartTotal)}</span>
+                    </h3>
+                    <ul id="cart-list" class="mb-4 max-h-60 overflow-y-auto pr-2">
+                        ${salesCart.length > 0 ? cartHtml : '<li class="text-gray-600 italic">No hay productos en el carrito.</li>'}
+                    </ul>
+
+                    <button id="checkout-btn" class="btn-honey w-full py-3 rounded-lg font-bold disabled:opacity-50" ${salesCart.length === 0 ? 'disabled' : ''}>
+                        <svg class="animate-spin h-5 w-5 mr-3 hidden" id="checkout-spinner" viewBox="0 0 24 24"></svg>
+                        Confirmar Venta (${formatCurrency(cartTotal)})
+                    </button>
+                </div>
+            `;
+            $id('sales-view').innerHTML = viewHtml;
+
+            // Añadir Listeners
+            $id('barcode-input').addEventListener('keypress', handleBarcodeScan);
+            $id('checkout-btn').addEventListener('click', processCheckout);
+            $id('cart-list').querySelectorAll('.remove-from-cart').forEach(btn => {
+                btn.addEventListener('click', removeFromCart);
             });
         }
 
-        // --- CREACIÓN DE EVENTO (Formulario Submit) ---
+        // --- Lógica de Venta (Requisito 3) ---
 
-        async function handleNewEventSubmit(e) {
-            e.preventDefault();
-            
-            const name = document.getElementById('event-name').value.trim();
-            const location = document.getElementById('event-location').value.trim();
-            const ivaRateValue = document.getElementById('iva-rate').value; 
+        /** Maneja el evento de escaneo de código de barras. */
+        function handleBarcodeScan(event) {
+            if (event.key === 'Enter') {
+                const barcode = $id('barcode-input').value.trim();
+                $id('barcode-input').value = ''; // Limpiar input para el próximo escaneo
+                event.preventDefault();
 
-            if (!name || !location || ivaRateValue === "") {
-                 showMessage("Error: Por favor, completa todos los campos del evento.", 'error');
+                if (!barcode) return;
+
+                addProductToCart(barcode);
+            }
+        }
+
+        /** Agrega un producto al carrito por código de barras. */
+        function addProductToCart(barcode) {
+            const products = currentEventData.products;
+            let foundProduct = null;
+            let productLevel = null;
+
+            for (const level in products) {
+                if (products[level].barcode === barcode) {
+                    foundProduct = products[level];
+                    productLevel = level;
+                    break;
+                }
+            }
+
+            if (!foundProduct) {
+                showMessage(`Código de barras ${barcode} no encontrado.`, 'error');
+                return;
+            }
+
+            if (foundProduct.currentInventory <= 0) {
+                 showMessage(`¡Inventario agotado para ${productLevel} Picante!`, 'error');
                  return;
             }
 
-            if (Object.keys(productsToCreate).length === 0) {
-                showMessage("Por favor, incluye al menos un producto en la lista antes de Guardar.", 'error');
-                return;
-            }
-
-            document.getElementById('save-event-btn').disabled = true;
-
-            const newEvent = {
-                name,
-                location,
-                ivaRate: ivaRateValue,
-                products: productsToCreate,
-            };
-
-            google.script.run
-                .withSuccessHandler(response => {
-                    document.getElementById('save-event-btn').disabled = false;
-                    if (response.error) {
-                        showMessage(`Error al guardar el evento: ${response.error}`, 'error');
-                    } else {
-                        showMessage(`Evento "${name}" creado exitosamente. Recargando eventos...`, 'success');
-                        
-                        // Limpiar estado y UI
-                        productsToCreate = {};
-                        document.getElementById('new-event-form').reset();
-                        renderProductList();
-                        document.getElementById('new-event-form-container').classList.add('hidden');
-                        loadEvents(); // Recargar la lista de eventos
-                    }
-                })
-                .withFailureHandler(e => {
-                    document.getElementById('save-event-btn').disabled = false;
-                    showMessage(`Error de conexión con Apps Script: ${e}`, 'error');
-                })
-                .createEvent(newEvent);
-        }
-
-        // --- REGISTRO DE VENTA ---
-
-        /** Registra una venta por un producto específico (identificado por barcode) */
-        async function registerSale(scannedBarcode) {
-            if (!currentEventId || !currentEvent) {
-                showMessage("Por favor, selecciona un evento primero.", 'error');
-                return;
-            }
-            
-            const product = currentEvent.products[scannedBarcode];
-
-            if (!product || !product.rowIndex) {
-                 showMessage(`Código de barras "${scannedBarcode}" no encontrado en este evento.`, 'error');
-                return;
-            }
-
-            if (product.currentInventory <= 0) {
-                showMessage(`¡Inventario agotado para el producto: ${product.name}!`, 'error');
-                return;
-            }
-
-            const newInventory = product.currentInventory - 1;
-            const priceWithIVA = product.priceWithIVA || 0;
-            const ivaRate = currentEvent.ivaRate;
-            const { priceWithoutIVA, ivaAmount } = calculateIVA(priceWithIVA, ivaRate);
-            
-            const saleData = {
-                productName: product.name,
-                priceTotal: priceWithIVA,
-                priceWithoutIVA: priceWithoutIVA,
-                ivaAmount: ivaAmount,
-            };
-
-            // Llamada al Apps Script
-            google.script.run
-                .withSuccessHandler(response => {
-                    if (response.error) {
-                        showMessage(`Error al registrar la venta: ${response.error}`, 'error');
-                    } else {
-                        showMessage(`Venta registrada: ${product.name} por ${formatCurrency(priceWithIVA)}.`, 'success');
-                        
-                        // Forzamos la recarga de los datos del evento y el historial
-                        loadEventData(currentEventId);
-                    }
-                })
-                .withFailureHandler(e => showMessage(`Error de conexión al registrar venta: ${e}`, 'error'))
-                .registerSale(currentEventId, scannedBarcode, product.rowIndex, newInventory, saleData);
-        }
-
-        // --- MANEJO DE ESCÁNER DE CÓDIGO DE BARRAS (QuaggaJS) ---
-        
-        const scannerModal = document.getElementById('scanner-modal');
-        const openScannerBtn = document.getElementById('open-scanner-btn');
-        const stopScannerBtn = document.getElementById('stop-scanner-btn');
-        const scannerResult = document.getElementById('scanner-result');
-        const scannerPlaceholder = document.getElementById('scanner-placeholder');
-
-        let isScanning = false;
-
-        function startScanner() {
-            if (!currentEventId) {
-                showMessage("Por favor, selecciona un evento primero para escanear.", 'error');
-                return;
-            }
-            if (isScanning) return;
-            
-            scannerModal.classList.remove('hidden');
-            scannerResult.classList.add('hidden');
-            scannerPlaceholder.textContent = "Cargando cámara...";
-
-            if (typeof Quagga === 'undefined') {
-                scannerPlaceholder.textContent = "Error: La librería de escaneo no está cargada.";
-                return;
-            }
-            
-            Quagga.init({
-                inputStream: {
-                    name: "Live",
-                    type: "LiveStream",
-                    target: document.querySelector('#scanner-container'), 
-                    constraints: {
-                        facingMode: "environment" 
-                    },
-                },
-                decoder: {
-                    readers: [
-                        "ean_reader", 
-                        "ean_8_reader", 
-                        "upc_reader", 
-                        "upc_e_reader" 
-                    ]
-                }
-            }, function (err) {
-                if (err) {
-                    console.error("Error al iniciar Quagga:", err);
-                    scannerPlaceholder.textContent = "Error: No se puede acceder a la cámara. Asegúrate de tener permisos.";
-                    scannerResult.textContent = "Error al iniciar cámara.";
-                    scannerResult.classList.remove('hidden');
-                    isScanning = false;
-                    return;
-                }
-                
-                Quagga.start();
-                isScanning = true;
-                scannerPlaceholder.textContent = "Escaneando, apunta al código de barras...";
-                
-                setTimeout(() => {
-                    scannerPlaceholder.classList.add('hidden');
-                }, 500);
+            salesCart.push({
+                level: productLevel,
+                price: foundProduct.price,
+                barcode: barcode
             });
-            
-            Quagga.onDetected(async function (result) {
-                if (!isScanning) return;
-                
-                const barcode = result.codeResult.code;
-                
-                stopScanner();
-                
-                scannerResult.textContent = `Código detectado: ${barcode}`;
-                scannerResult.classList.remove('hidden');
+            renderSalesView();
+            showMessage(`${productLevel} Picante agregado al carrito.`, 'success');
+        }
 
-                if (currentEvent && currentEvent.products[barcode]) {
-                    updateScannedProductDisplay(currentEvent.products[barcode]);
-                    await registerSale(barcode);
+        /** Elimina un producto del carrito. */
+        function removeFromCart(event) {
+            const index = parseInt(event.target.dataset.index, 10);
+            if (index >= 0 && index < salesCart.length) {
+                salesCart.splice(index, 1);
+                renderSalesView();
+                showMessage('Producto eliminado del carrito.', 'info');
+            }
+        }
+
+        /** Procesa la venta y actualiza el inventario en Firestore. */
+        async function processCheckout() {
+            if (salesCart.length === 0 || !activeEventId || !currentEventData) return;
+
+            const btn = $id('checkout-btn');
+            const spinner = $id('checkout-spinner');
+            btn.disabled = true;
+            spinner.classList.remove('hidden');
+
+            const eventDocRef = doc(db, getUserCollectionPath('events'), activeEventId);
+            const totalSale = salesCart.reduce((sum, item) => sum + item.price, 0);
+
+            // Agrupa los artículos del carrito para el débito
+            const itemsSold = salesCart.reduce((acc, item) => {
+                acc[item.level] = (acc[item.level] || 0) + 1;
+                return acc;
+            }, {});
+
+            try {
+                // Usar una Transacción para asegurar la integridad de la base de datos
+                await runTransaction(db, async (transaction) => {
+                    const eventDoc = await transaction.get(eventDocRef);
+                    if (!eventDoc.exists()) {
+                        throw "Documento del evento no existe.";
+                    }
+
+                    const newProducts = { ...eventDoc.data().products };
+                    const salesLog = [...eventDoc.data().salesLog || []];
+
+                    // 1. Verificar inventario y debitar
+                    for (const level in itemsSold) {
+                        const qtySold = itemsSold[level];
+                        if (!newProducts[level] || newProducts[level].currentInventory < qtySold) {
+                            throw `Inventario insuficiente para ${level}.`;
+                        }
+                        newProducts[level].currentInventory -= qtySold;
+                    }
+
+                    // 2. Registrar la venta en el log
+                    salesLog.push({
+                        time: new Date(),
+                        total: totalSale,
+                        items: itemsSold
+                    });
+
+                    // 3. Actualizar el documento del evento
+                    transaction.update(eventDocRef, {
+                        products: newProducts,
+                        salesLog: salesLog
+                    });
+                });
+
+                // Transacción exitosa
+                showMessage(`🎉 Venta de ${formatCurrency(totalSale)} confirmada! Inventario actualizado.`, 'success');
+                salesCart = []; // Limpiar carrito
+                renderSalesView(); // Redibuja la vista de ventas
+            } catch (error) {
+                console.error("Error al procesar la venta:", error);
+                if (typeof error === 'string') {
+                    showMessage(`❌ Error en la venta: ${error}`, 'error');
                 } else {
-                    showMessage(`Código de barras "${barcode}" no reconocido para este evento.`, 'error');
-                    updateScannedProductDisplay();
+                    showMessage(`❌ Error en la venta: ${error.message}`, 'error');
                 }
-
-                setTimeout(() => {
-                    scannerModal.classList.add('hidden');
-                    scannerResult.classList.add('hidden');
-                }, 1000);
-            });
-        }
-
-        function stopScanner() {
-            if (isScanning && typeof Quagga !== 'undefined') {
-                Quagga.stop();
-                isScanning = false;
-            }
-            scannerModal.classList.add('hidden');
-            scannerPlaceholder.classList.remove('hidden');
-            scannerPlaceholder.textContent = "Cargando cámara...";
-
-            const video = document.querySelector('#scanner-container video');
-            if (video && video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
-                video.srcObject = null;
+            } finally {
+                btn.disabled = false;
+                spinner.classList.add('hidden');
             }
         }
-        
-        // --- MANEJO DE LA INTERFAZ y LISTENERS ---
-        
-        /** Muestra la sección de inventario/ventas y oculta el formulario de nuevo evento. */
-        function showSalesSection() {
-            document.getElementById('sales-inventory-section').classList.remove('hidden');
-            document.getElementById('new-event-form-container').classList.add('hidden');
-            document.getElementById('scan-barcode-input').focus();
-        }
 
-        /** Oculta la sección de inventario/ventas. */
-        function hideSalesSection() {
-            document.getElementById('sales-inventory-section').classList.add('hidden');
-            currentEventId = null;
-            currentEvent = null;
-            document.getElementById('current-total-inventory-display').textContent = '--';
-            document.getElementById('event-name-display').textContent = 'Cargando...';
-            document.getElementById('event-history-name').textContent = 'este Evento';
-            document.getElementById('iva-rate-display').textContent = '0%';
-            document.getElementById('sales-history').innerHTML = '<li class="text-gray-500 italic text-sm">No hay ventas registradas aún.</li>';
-        }
+        // --- Inicialización de Firebase y Auth ---
 
+        async function initFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
 
-        window.onload = function() {
-            isReady = true;
-
-            // Eventos del formulario de Nuevo Producto
-            document.getElementById('add-product-btn').addEventListener('click', () => {
-                const name = document.getElementById('product-name').value.trim();
-                const barcode = document.getElementById('product-barcode').value.trim();
-                const initialInventory = parseInt(document.getElementById('initial-inventory').value, 10);
-                const priceWithIVA = parseFloat(document.getElementById('price-with-iva').value);
-                
-                if (!name || !barcode || isNaN(initialInventory) || isNaN(priceWithIVA) || initialInventory <= 0 || priceWithIVA <= 0) {
-                    showMessage("Por favor, completa todos los campos del producto correctamente.", 'error');
-                    return;
-                }
-
-                if (productsToCreate[barcode]) {
-                    showMessage(`El código de barras ${barcode} ya está en la lista. Usa uno único.`, 'error');
-                    return;
-                }
-                
-                productsToCreate[barcode] = { 
-                    name, 
-                    barcode, 
-                    initialInventory, 
-                    priceWithIVA 
-                };
-                
-                // Limpiar campos y refrescar lista
-                document.getElementById('product-name').value = '';
-                document.getElementById('product-barcode').value = '';
-                document.getElementById('initial-inventory').value = '';
-                document.getElementById('price-with-iva').value = '';
-                
-                renderProductList();
-                document.getElementById('product-name').focus();
-            });
-
-
-            // Eventos del formulario principal
-            document.getElementById('new-event-form').addEventListener('submit', handleNewEventSubmit);
-
-            document.getElementById('show-new-event-btn').addEventListener('click', () => {
-                document.getElementById('new-event-form-container').classList.remove('hidden');
-                hideSalesSection();
-                productsToCreate = {}; // Limpiar
-                renderProductList(); 
-            });
-
-            document.getElementById('cancel-new-event-btn').addEventListener('click', () => {
-                document.getElementById('new-event-form-container').classList.add('hidden');
-                productsToCreate = {}; // Limpiar
-                // Si hay un evento seleccionado, volvemos a intentar cargarlo
-                const selectedEvent = document.getElementById('event-select').value;
-                if (selectedEvent) {
-                    loadEventData(selectedEvent);
-                }
-            });
-            
-            document.getElementById('event-select').addEventListener('change', (e) => {
-                const eventId = e.target.value;
-                loadEventData(eventId);
-            });
-
-            // Eventos de Venta Rápida
-            const scanInput = document.getElementById('scan-barcode-input');
-            scanInput.addEventListener('keydown', async (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const scannedBarcode = scanInput.value.trim();
-                    
-                    if (currentEvent && currentEvent.products[scannedBarcode]) {
-                        updateScannedProductDisplay(currentEvent.products[scannedBarcode]);
-                        await registerSale(scannedBarcode);
+                // Esperar a que el estado de autenticación cambie (se complete el inicio de sesión)
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                    } else if (initialAuthToken) {
+                        // Usar token personalizado
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        userId = auth.currentUser.uid;
                     } else {
-                        showMessage(`Código de barras "${scannedBarcode}" no reconocido para este evento.`, 'error');
-                        updateScannedProductDisplay();
+                        // Usar inicio de sesión anónimo como fallback
+                        const anonUser = await signInAnonymously(auth);
+                        userId = anonUser.user.uid;
                     }
-                    scanInput.value = ''; 
-                }
-            });
-            
-            document.getElementById('manual-sell-btn').addEventListener('click', async () => {
-                const scannedBarcode = document.getElementById('scan-barcode-input').value.trim();
-                if (currentEvent && currentEvent.products[scannedBarcode]) {
-                    updateScannedProductDisplay(currentEvent.products[scannedBarcode]);
-                    await registerSale(scannedBarcode);
-                } else {
-                    showMessage(`Código de barras "${scannedBarcode}" no reconocido para este evento.`, 'error');
-                    updateScannedProductDisplay();
-                }
-                document.getElementById('scan-barcode-input').value = '';
-            });
 
-            // Eventos del escáner (QuaggaJS)
-            openScannerBtn.addEventListener('click', () => {
-                 if (!currentEventId) {
-                    showMessage("Por favor, selecciona un evento primero para escanear.", 'error');
-                    return;
-                }
-                startScanner();
-            });
+                    // Una vez que el userId esté disponible
+                    $id('user-id').textContent = userId;
+                    isAuthReady = true;
+                    loadActiveEvent();
+                });
 
-            stopScannerBtn.addEventListener('click', stopScanner);
+            } catch (error) {
+                console.error("Error en la inicialización de Firebase:", error);
+                $id('loader').innerHTML = `<p class="text-chili font-bold">Error Fatal: No se pudo conectar a la base de datos. ${error.message}</p>`;
+            }
+        }
 
-            // Carga inicial de eventos
-            loadEvents();
-        };
+        // Inicia la aplicación al cargar la ventana
+        window.onload = initFirebase;
     </script>
 </body>
 </html>
