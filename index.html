@@ -403,7 +403,14 @@
                 },
                 decoder : {
                     readers : ["code_128_reader", "ean_reader", "upc_reader", "ean_8_reader"]
-                }
+                },
+                // --- AJUSTES DE PRECISIÓN PARA MÓVILES ---
+                locator: {
+                    patchSize: "medium", // Mejora la detección en móviles
+                    halfSample: true,    // Ayuda al rendimiento en dispositivos lentos
+                },
+                frequency: 10, // Aumenta el número de frames procesados por segundo
+                // --- FIN AJUSTES DE PRECISIÓN ---
             }, function(err) {
                 if (err) {
                     showMessage('error', `Error al inicializar el escáner (Permisos de cámara o hardware): ${err.message}.`);
@@ -541,6 +548,7 @@
 
             const button = document.getElementById('setupButton');
             button.disabled = true;
+            const originalText = button.textContent;
             button.textContent = 'Guardando...';
 
             const productContainers = document.querySelectorAll('#setupForm > div');
@@ -581,7 +589,7 @@
                 console.error("Error en handleSetup:", error);
             } finally {
                 button.disabled = false;
-                button.textContent = 'Guardar Inventario e Iniciar Venta';
+                button.textContent = originalText;
             }
         }
 
