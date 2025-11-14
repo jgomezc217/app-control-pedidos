@@ -265,6 +265,7 @@
 
         /** Inicia o detiene el escáner de cámara. */
         function toggleCameraScanner() {
+            console.log('Botón de cámara presionado.'); // <-- Registro de diagnóstico
             const scannerContainer = document.getElementById('scannerContainer');
             const cameraButton = document.getElementById('cameraButton');
             const cameraIcon = document.getElementById('cameraIcon');
@@ -300,7 +301,7 @@
                 inputStream : {
                     name : "Live",
                     type : "LiveStream",
-                    target: document.querySelector('#scannerContainer'),
+                    target: '#scannerContainer', // <-- Ajustado a ID string para mayor fiabilidad
                     constraints: {
                         width: 600,
                         height: 250,
@@ -313,8 +314,10 @@
                 }
             }, function(err) {
                 if (err) {
-                    showMessage('error', `Error al inicializar el escáner: ${err.message}.`);
-                    console.error(err);
+                    showMessage('error', `Error al inicializar el escáner (Permisos de cámara o hardware): ${err.message}.`);
+                    console.error('Error de Quagga.init:', err);
+                    // Ocultar el contenedor si falla la inicialización
+                    document.getElementById('scannerContainer').classList.add('hidden');
                     return;
                 }
                 Quagga.start();
