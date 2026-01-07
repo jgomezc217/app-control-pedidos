@@ -3,810 +3,627 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>POS Miel Picante</title>
-    <!-- Carga Tailwind CSS -->
+    <title>Control de Inventario y Gastos</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Librería para Escaneo de Códigos de Barras -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script> 
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Estilo personalizado para un diseño limpio y enfocado al POS */
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f7f7f7;
-            touch-action: manipulation; /* Mejor manejo táctil en móviles */
-        }
-        .main-card {
-            max-width: 600px;
-            margin: 0 auto;
-        }
-        .btn-primary {
-            background-color: #ff5722; /* Tono naranja/rojo de miel picante */
-            transition: transform 0.1s ease;
-        }
-        .btn-primary:hover {
-            background-color: #e64a19;
-            transform: translateY(-1px);
-        }
-        .btn-primary:active {
-            transform: translateY(1px);
-        }
-        .input-style {
-            border-color: #ff5722 !important;
-        }
-        .barcode-input {
-            font-size: 1.5rem;
-            text-align: center;
-        }
-        .disabled-btn {
-            background-color: #cccccc !important;
-            cursor: not-allowed;
-        }
-        /* Estilos para el scanner de cámara */
-        #scannerContainer {
-            position: relative;
+        body { font-family: 'Inter', sans-serif; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .tab-button.active { border-bottom-color: #3b82f6; color: #1e40af; font-weight: 600; }
+        .product-line .remove-product-btn, .label-product-entry .remove-label-product-btn { display: none; }
+        .product-line:not(:first-child) .remove-product-btn, .label-product-entry:not(:first-child) .remove-label-product-btn { display: inline-flex; }
+        .stock-display { transition: opacity 0.3s; }
+
+        /* --- Estilos para la Pestaña de Etiquetas --- */
+        #labels-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            padding: 1cm;
             width: 100%;
-            height: 250px; /* Tamaño del viewport de la cámara aumentado */
-            background-color: #000;
-            margin-top: 10px;
+            max-width: 21cm;
+            min-height: 29.7cm;
+            background-color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            margin: 2rem auto;
             border-radius: 8px;
-            overflow: hidden;
         }
-        /* Quagga.js necesita que el video se renderice dentro del contenedor */
-        #scannerContainer video, #scannerContainer canvas {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+        .label {
+            border: 1px dashed #9ca3af;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-wrap: break-word;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.75rem;
+            line-height: 1.4;
+        }
+        .label p, .label div { margin: 0; }
+        .label strong { font-weight: 600; color: #1f2937; }
+
+        @media print {
+            @page {
+                size: auto;
+                margin: 0.5cm;
+            }
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                background-color: #ffffff !important;
+            }
+            #main-form-container, .non-printable {
+                display: none !important;
+            }
+            #print-area, #labels-container {
+                margin: 0; padding: 0; width: 100%; min-height: 0;
+                box-shadow: none; border: none; border-radius: 0;
+                background-color: transparent !important;
+            }
+            .label {
+                page-break-inside: avoid;
+                border: 1px solid #6b7280;
+            }
+        }
+
+        @media (max-width: 768px) {
+            #labels-container {
+                min-height: auto; padding: 1rem;
+            }
         }
     </style>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'hot-honey': '#ff5722',
-                        'hot-honey-dark': '#e64a19',
-                    }
-                }
-            }
-        }
-    </script>
 </head>
-<body class="p-4 md:p-8">
-
-    <div id="app" class="main-card bg-white shadow-xl rounded-xl p-4 md:p-6 space-y-6">
-        
-        <header class="text-center pb-4 border-b">
-            <h1 class="text-3xl font-bold text-hot-honey">🍯 POS Miel Picante 🌶️</h1>
-            <p class="text-gray-500">Control de Ventas e Inventario para Eventos</p>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-4">
+    
+    <div id="main-form-container" class="bg-white shadow-2xl rounded-xl p-6 md:p-10 w-full max-w-4xl mx-auto">
+        <header class="mb-6 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-700">🍯 Control de Negocio</h1>
         </header>
 
-        <!-- Mensajes del Sistema (Éxito/Error) -->
-        <div id="messageBox" class="hidden p-3 rounded-lg text-sm" role="alert"></div>
+        <div class="border-b border-slate-200 mb-6">
+            <nav class="flex flex-wrap -mb-px space-x-4">
+                <button id="tabInventoryBtn" class="tab-button active whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Movimientos de Inventario</button>
+                <button id="tabExpenseBtn" class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-slate-500 hover:text-slate-700">Registro de Gastos</button>
+                <button id="tabLabelsBtn" class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-slate-500 hover:text-slate-700">Generar Etiquetas</button>
+            </nav>
+        </div>
+
+        <!-- PESTAÑA DE INVENTARIO -->
+        <div id="inventoryContent">
+            <form id="inventoryForm">
+                <input type="hidden" name="formType" value="inventory">
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Tipo de Movimiento:</label>
+                        <div class="flex items-center space-x-4">
+                            <label class="flex items-center"><input type="radio" name="tipoMovimiento" value="Ingreso" required checked class="h-4 w-4 text-sky-600 border-slate-300 focus:ring-sky-500"><span class="ml-2 text-slate-700">Ingreso</span></label>
+                            <label class="flex items-center"><input type="radio" name="tipoMovimiento" value="Venta" required class="h-4 w-4 text-sky-600 border-slate-300 focus:ring-sky-500"><span class="ml-2 text-slate-700">Venta</span></label>
+                        </div>
+                    </div>
+                    <div id="formIngreso" class="space-y-4">
+                        <div>
+                            <label for="productoIngreso" class="block text-sm font-medium text-slate-700 mb-1">Producto:</label>
+                            <div>
+                                <select id="productoIngreso" name="producto" class="w-full p-3 border border-slate-300 rounded-lg shadow-sm focus:ring-2 focus:ring-sky-500"></select>
+                                <div id="stockIngreso" class="text-right text-sm text-slate-500 font-semibold h-5 mt-1 pr-1"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="cantidadIngreso" class="block text-sm font-medium text-slate-700 mb-1">Cantidad:</label>
+                            <input type="number" id="cantidadIngreso" name="cantidad" min="1" class="w-full p-3 border border-slate-300 rounded-lg shadow-sm focus:ring-2 focus:ring-sky-500" placeholder="Ej: 10">
+                        </div>
+                    </div>
+                    <div id="formVenta" class="hidden space-y-6">
+                         <!-- Fila 1: Factura y Muestra -->
+                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                            <div>
+                               <label for="numeroFactura" class="block text-sm font-medium text-slate-700 mb-1">Número de Factura:</label>
+                               <input type="text" id="numeroFactura" name="numeroFactura" class="w-full p-3 border border-slate-300 rounded-lg shadow-sm focus:ring-2 focus:ring-sky-500" placeholder="Ej: 001-001-0001234">
+                           </div>
+                           <div class="flex items-center pt-6">
+                               <input type="checkbox" id="esMuestra" name="esMuestra" class="h-5 w-5 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                               <label for="esMuestra" class="ml-2 block text-sm font-medium text-slate-700">Registrar como Muestra (sin venta)</label>
+                           </div>
+                        </div>
+
+                        <!-- Fila 2: Configuración POS -->
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <div class="flex items-center mb-2">
+                                <input type="checkbox" id="pagoConPOS" name="pagoConPOS" class="h-5 w-5 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                <label for="pagoConPOS" class="ml-2 block text-sm font-medium text-slate-700">Venta con POS (Comisión)</label>
+                            </div>
+                            <div id="posFields" class="hidden ml-7 mt-2">
+                                <label for="comisionPOS" class="block text-sm font-medium text-slate-700 mb-1">% Comisión POS:</label>
+                                <div class="relative w-32">
+                                    <input type="number" id="comisionPOS" name="comisionPOS" step="0.01" min="0" max="100" class="w-full p-2 pr-8 border border-slate-300 rounded-md shadow-sm focus:ring-2 focus:ring-sky-500 text-sm" placeholder="Ej: 3">
+                                    <span class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 text-sm">%</span>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1">Este porcentaje se restará del total registrado.</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Fila 3: Delivery -->
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <div class="flex items-center mb-2">
+                                <input type="checkbox" id="incluyeDelivery" name="incluyeDelivery" class="h-5 w-5 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                <label for="incluyeDelivery" class="ml-2 block text-sm font-medium text-slate-700">Incluir Delivery</label>
+                            </div>
+                            <div id="deliveryFields" class="hidden ml-7 mt-2">
+                                <label for="montoDelivery" class="block text-sm font-medium text-slate-700 mb-1">Monto Delivery ($):</label>
+                                <div class="relative w-32">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 text-sm">$</span>
+                                    <input type="number" id="montoDelivery" name="montoDelivery" step="0.01" min="0" class="w-full p-2 pl-7 border border-slate-300 rounded-md shadow-sm focus:ring-2 focus:ring-sky-500 text-sm" placeholder="0.00">
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1">Se registrará aparte (sin IVA).</p>
+                            </div>
+                        </div>
+
+                        <div id="productLines" class="space-y-4 border-t border-b border-slate-200 py-4"></div>
+                        <div class="flex justify-between items-center">
+                            <button type="button" id="addProductBtn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm">+ Añadir Producto</button>
+                            <div class="text-right">
+                                <p class="text-slate-600">Total Productos:</p>
+                                <p id="saleTotal" class="text-2xl font-bold text-slate-800">$0.00</p>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="descripcionVenta" class="block text-sm font-medium text-slate-700 mb-1">Descripción:</label>
+                            <textarea id="descripcionVenta" name="descripcionVenta" rows="2" class="w-full p-3 border border-slate-300 rounded-lg shadow-sm focus:ring-2 focus:ring-sky-500" placeholder="Ej: Venta a cliente minorista"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end pt-6"><button type="submit" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2">Registrar Movimiento</button></div>
+            </form>
+        </div>
         
-        <!-- ============================================== -->
-        <!-- NUEVA VISTA DE INICIO (START) -->
-        <!-- ============================================== -->
-        <section id="startView" class="space-y-6">
-            <h2 class="text-xl font-semibold text-gray-700">1. Seleccionar Evento Activo</h2>
-            
-            <!-- Selector de Eventos -->
-            <div class="space-y-4 p-4 border rounded-lg shadow-sm bg-gray-50">
-                <label for="eventSelector" class="block text-lg font-medium text-gray-700">Eventos Disponibles:</label>
-                <select id="eventSelector" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 bg-white border focus:border-hot-honey focus:ring-hot-honey">
-                    <option value="" disabled selected>Cargando eventos...</option>
-                </select>
-                <button onclick="selectEvent()" id="startButton" class="w-full btn-primary text-white font-semibold py-3 rounded-lg shadow-md transition duration-200 disabled:opacity-50" disabled>
-                    Iniciar Evento y Configuración
-                </button>
-            </div>
+        <!-- PESTAÑA DE GASTOS -->
+        <div id="expenseContent" class="hidden">
+             <form id="expenseForm" class="space-y-6">
+                <input type="hidden" name="formType" value="expense">
+                <div>
+                    <label for="tipoGasto" class="block text-sm font-medium text-slate-700 mb-1">Tipo de Gasto:</label>
+                    <select id="tipoGasto" name="tipoGasto" required class="w-full p-3 border border-slate-300 rounded-lg shadow-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                        <option value="" disabled selected>Selecciona un tipo...</option>
+                        <option value="Transporte">Transporte</option>
+                        <option value="Material de Empaque">Material de Empaque</option>
+                        <option value="Insumos">Insumos</option>
+                        <option value="Publicidad">Publicidad</option>
+                        <option value="Servicios (Luz, Agua, etc.)">Servicios (Luz, Agua, etc.)</option>
+                        <option value="Salarios">Salarios</option>
+                        <option value="Otros">Otros</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-3 gap-4 items-end">
+                     <div class="col-span-2">
+                        <label for="valorGasto" class="block text-sm font-medium text-slate-700 mb-1">Valor del Gasto:</label>
+                        <input type="number" id="valorGasto" name="valorGasto" required step="0.01" min="0" class="w-full p-3 border border-slate-300 rounded-lg shadow-sm focus:ring-2 focus:ring-sky-500" placeholder="Ej: 50.75">
+                    </div>
+                     <div class="col-span-1 flex items-center pb-3">
+                        <input type="checkbox" id="gastoIncluyeIVA" name="gastoIncluyeIVA" checked class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                        <label for="gastoIncluyeIVA" class="ml-2 text-sm text-slate-700">Incluye IVA</label>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Método de Pago:</label>
+                    <div class="flex items-center space-x-4">
+                        <label class="flex items-center"><input type="radio" name="metodoPago" value="Efectivo" required checked class="h-4 w-4 text-sky-600 border-slate-300 focus:ring-sky-500"><span class="ml-2 text-slate-700">Efectivo</span></label>
+                        <label class="flex items-center"><input type="radio" name="metodoPago" value="Tarjeta" required class="h-4 w-4 text-sky-600 border-slate-300 focus:ring-sky-500"><span class="ml-2 text-slate-700">Tarjeta</span></label>
+                    </div>
+                </div>
+                <div>
+                    <label for="descripcionGasto" class="block text-sm font-medium text-slate-700 mb-1">Descripción del Gasto:</label>
+                    <textarea id="descripcionGasto" name="descripcionGasto" required rows="3" class="w-full p-3 border border-slate-300 rounded-lg shadow-sm focus:ring-2 focus:ring-sky-500" placeholder="Ej: Compra de cajas para envío"></textarea>
+                </div>
+                <div class="flex items-center justify-end pt-4"><button type="submit" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md">Registrar Gasto</button></div>
+            </form>
+        </div>
 
-            <!-- Creador de Eventos -->
-            <div class="space-y-4 p-4 border rounded-lg shadow-sm border-dashed border-gray-300">
-                <h3 class="text-lg font-semibold text-gray-700">O Crear Nuevo Evento</h3>
-                <div class="flex space-x-2">
-                    <input type="text" id="newEventName" class="flex-1 rounded-md border-2 input-style shadow-sm p-3 focus:outline-none" 
-                           placeholder="Ej: Mercado de Navidad 2026">
-                    <button onclick="handleCreateEvent()" id="createEventButton" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-200">
-                        Crear
+        <!-- PESTAÑA DE ETIQUETAS -->
+        <div id="labelsContent" class="hidden">
+            <p class="text-slate-600 mb-6">Completa los campos para crear una nueva etiqueta y agrégala a la hoja de impresión.</p>
+            <form id="label-form" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div>
+                    <label for="labelName" class="block text-sm font-medium text-slate-700 mb-1">Nombre y Apellido</label>
+                    <input type="text" id="labelName" required class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500">
+                </div>
+                <div>
+                    <label for="labelPhone" class="block text-sm font-medium text-slate-700 mb-1">Teléfono</label>
+                    <input type="tel" id="labelPhone" required class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500">
+                </div>
+                <div class="md:col-span-2">
+                    <label for="labelAddress" class="block text-sm font-medium text-slate-700 mb-1">Dirección de Entrega</label>
+                    <textarea id="labelAddress" rows="3" required class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500"></textarea>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Productos a Entregar</label>
+                    <div id="label-products-list" class="space-y-3"></div>
+                    <button type="button" id="add-label-product-btn" class="mt-3 text-sm text-sky-600 hover:text-sky-800 font-semibold">+ Añadir otro producto</button>
+                </div>
+                <div>
+                    <label for="labelPrice" class="block text-sm font-medium text-slate-700 mb-1">Precio (Total)</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">$</span>
+                        <input type="number" id="labelPrice" step="0.01" required class="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500">
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <label for="label-payment-method" class="block text-sm font-medium text-slate-700 mb-1">Método de Pago</label>
+                    <select id="label-payment-method" class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500">
+                        <option>Efectivo</option>
+                        <option>Transferencia</option>
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                     <button type="submit" class="w-full mt-4 bg-sky-600 text-white font-semibold py-3 px-4 rounded-md hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500">
+                        Agregar Etiqueta a la Cola
                     </button>
                 </div>
-            </div>
-            <p class="text-sm text-gray-500 text-center">Una vez creado, el nuevo evento aparecerá en la lista superior.</p>
-        </section>
+            </form>
+        </div>
 
-
-        <!-- Vista de Configuración Inicial (SETUP) -->
-        <section id="setupView" class="hidden space-y-4">
-            <h2 class="text-xl font-semibold text-gray-700">2. Configuración de <span id="activeEventName" class="text-hot-honey font-bold"></span></h2>
-            <p class="text-sm text-gray-500">Ingresa el inventario inicial, el precio y el código SKU/Barcode para este evento.</p>
-            
-            <div id="setupForm" class="space-y-4">
-                <!-- Productos a configurar -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-nivel="Bajo" data-sku="Miel01">
-                    <div class="md:col-span-1">
-                        <label class="block text-sm font-medium text-gray-700">Nivel Bajo</label>
-                        <input type="text" class="sku-input mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-100" value="Miel01" disabled>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Cant. Inicial</label>
-                        <input type="number" min="0" value="0" class="qty-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="50">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Precio ($)</label>
-                        <input type="number" step="0.01" min="0" value="0.00" class="price-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="12.00">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-nivel="Medio" data-sku="Miel02">
-                    <div class="md:col-span-1">
-                        <label class="block text-sm font-medium text-gray-700">Nivel Medio</label>
-                        <input type="text" class="sku-input mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-100" value="Miel02" disabled>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Cant. Inicial</label>
-                        <input type="number" min="0" value="0" class="qty-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="75">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Precio ($)</label>
-                        <input type="number" step="0.01" min="0" value="0.00" class="price-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="13.50">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-nivel="Alto" data-sku="Miel03">
-                    <div class="md:col-span-1">
-                        <label class="block text-sm font-medium text-gray-700">Nivel Alto</label>
-                        <input type="text" class="sku-input mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-100" value="Miel03" disabled>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Cant. Inicial</label>
-                        <input type="number" min="0" value="0" class="qty-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="25">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Precio ($)</label>
-                        <input type="number" step="0.01" min="0" value="0.00" class="price-input mt-1 block w-full rounded-md border input-style shadow-sm p-2" placeholder="15.00">
-                    </div>
-                </div>
-                
-                <button onclick="handleSetup()" id="setupButton" class="w-full btn-primary text-white font-semibold py-3 rounded-lg shadow-md transition duration-200">
-                    Guardar Inventario e Iniciar Venta
-                </button>
-            </div>
-        </section>
-
-        <!-- Vista de Venta (SALE) -->
-        <section id="saleView" class="hidden space-y-6">
-            <div class="flex justify-between items-center border-b pb-2">
-                <h2 class="text-xl font-semibold text-gray-700">3. Venta Activa: <span id="currentEventName" class="text-hot-honey font-bold"></span></h2>
-                <button onclick="endSession()" class="text-sm text-gray-500 hover:text-red-500 transition duration-200">
-                    Finalizar Sesión (Cambiar Evento)
-                </button>
-            </div>
-
-            <!-- Entrada de Código de Barras / SKU -->
-            <div class="space-y-2">
-                <label for="barcodeInput" class="block text-lg font-medium text-gray-700">Escaneo y Entrada Manual de SKU</label>
-                <div class="flex space-x-2">
-                    <input type="text" id="barcodeInput" class="barcode-input flex-1 rounded-lg border-2 input-style shadow-lg p-3 focus:outline-none focus:ring-2 focus:ring-hot-honey" 
-                           placeholder="Escanea aquí o ingresa SKU (Miel01, Miel02, Miel03)" 
-                           onkeydown="if(event.key === 'Enter') addItemToCart(this.value); this.value='';" autofocus>
-                    <button onclick="toggleCameraScanner()" id="cameraButton" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 px-4 rounded-lg shadow-md transition duration-200">
-                        <!-- Iconos de Cámara y Cerrar -->
-                        <svg id="cameraIcon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.218A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.218A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                        <svg id="closeIcon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                </div>
-                <p class="text-xs text-gray-500 pt-1">Presiona ENTER para añadir, o usa el botón de la cámara para escanear.</p>
-
-                <!-- Contenedor para la Cámara/Video (QuaggaJS usa este contenedor) -->
-                <div id="scannerContainer" class="hidden">
-                    <!-- QuaggaJS renderizará el video y el canvas aquí dentro -->
-                    <p class="text-white text-center text-sm p-2">Escáner activo. Enfoca el código de barras.</p>
-                </div>
-            </div>
-
-            <!-- Carrito de Compras -->
-            <div class="border rounded-lg shadow-sm p-3">
-                <h3 class="text-lg font-semibold mb-2 flex justify-between items-center">
-                    Carrito de Compras
-                    <span id="cartCount" class="bg-hot-honey text-white text-xs font-bold px-2 py-1 rounded-full">0 productos</span>
-                </h3>
-                <div id="cartItems" class="space-y-2 max-h-48 overflow-y-auto">
-                    <!-- Los artículos se añadirán aquí -->
-                    <p id="emptyCartMessage" class="text-gray-500 text-center py-4">El carrito está vacío. Escanea un producto.</p>
-                </div>
-                <div class="border-t mt-4 pt-4 flex justify-between items-center">
-                    <span class="text-xl font-bold text-gray-800">TOTAL:</span>
-                    <span id="cartTotal" class="text-3xl font-extrabold text-hot-honey">$0.00</span>
-                </div>
-            </div>
-
-            <!-- Inventario y Botón de Venta -->
-            <div class="space-y-4">
-                <h3 class="text-lg font-semibold text-gray-700">Inventario Actual</h3>
-                <div id="inventoryDisplay" class="space-y-2">
-                    <!-- El inventario se cargará aquí -->
-                    <p class="text-center text-gray-500">Cargando inventario...</p>
-                </div>
-
-                <button onclick="handleSale()" id="saleButton" class="w-full btn-primary text-white font-semibold py-3 rounded-lg shadow-md transition duration-200 disabled:opacity-50" disabled>
-                    Finalizar Venta
-                </button>
-            </div>
-        </section>
-
+        <!-- Mensaje de estado -->
+        <div class="flex items-center justify-end space-x-3 mt-6">
+            <div id="loader" class="loader"></div>
+            <div id="message" class="flex-grow p-4 rounded-lg text-center text-sm" role="alert"></div>
+        </div>
+    </div>
+    
+    <!-- Contenedor para la impresión de etiquetas -->
+    <div class="non-printable max-w-3xl mx-auto mt-8">
+        <div id="action-buttons" class="hidden flex-col sm:flex-row gap-4 mb-8">
+            <button id="print-btn" class="w-full sm:w-auto flex-1 bg-green-600 text-white font-semibold py-3 px-6 rounded-md hover:bg-green-700">
+                Imprimir Todas las Etiquetas
+            </button>
+            <button id="clear-btn" class="w-full sm:w-auto flex-1 bg-red-600 text-white font-semibold py-3 px-6 rounded-md hover:bg-red-700">
+                Limpiar Cola de Impresión
+            </button>
+        </div>
+    </div>
+    <div id="print-area">
+        <div id="labels-container"></div>
     </div>
 
+    <template id="productOptionsTemplate">
+        <option value="" disabled selected>Selecciona un producto...</option>
+        <option value="Miel Picante Baja botella 350 g">Miel Picante Baja botella 350 g</option>
+        <option value="Miel Picante Media botella 350 g">Miel Picante Media botella 350 g</option>
+        <option value="Miel Picante Alta botella 350 g">Miel Picante Alta botella 350 g</option>
+        <option value="Miel Picante Baja sachet">Miel Picante Baja sachet</option>
+        <option value="Miel Picante Media sachet">Miel Picante Media sachet</option>
+        <option value="Miel Picante Alta sachet">Miel Picante Alta sachet</option>
+        <option value="Miel Picante Baja galón">Miel Picante Baja galón</option>
+        <option value="Miel Picante Media galón">Miel Picante Media galón</option>
+        <option value="Miel Picante Alta galón">Miel Picante Alta galón</option>
+    </template>
+
     <script>
-        // ¡CRÍTICO! Este es el URL de la aplicación web de Apps Script (termina en /exec)
-        const apiUrl = 'https://script.google.com/macros/s/AKfycbx9tuTaUV3crfcFMLpj8aZFYrz6cQA1BwoxSSROqiDsMoDvOsesGWWegFO4JzydMQo3wA/exec'; 
-
-        let currentInventory = [];
-        let shoppingCart = {}; // {sku: {nivel, precio, cantidad}}
-        let isScanning = false; // Bandera para controlar el estado del escáner
-        let lastScannedCode = null; // Para evitar escaneos duplicados en ráfaga
-        let activeEvent = null; // {id: <timestamp>, name: <string>}
+        // --- 1. CONSTANTES Y REFERENCIAS A ELEMENTOS DEL DOM ---
+        const FULL_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxMapJvU3t9B7c0sfZIQRJbjPZpqjVVQCF9gsJrQd4evSVDCeNnPKlRfdkPLoxkZE8JyA/exec';
         
-        // --- UTILIDADES ---
+        // Plantillas
+        const productOptionsTemplate = document.getElementById('productOptionsTemplate');
 
-        /** Muestra un mensaje al usuario. */
-        function showMessage(type, content) {
-            const messageBox = document.getElementById('messageBox');
-            messageBox.textContent = content;
-            messageBox.className = 'p-3 rounded-lg text-sm transition-all duration-300';
-            messageBox.classList.remove('hidden');
-            
-            if (type === 'success') {
-                messageBox.classList.add('bg-green-100', 'text-green-800');
-            } else if (type === 'error') {
-                messageBox.classList.add('bg-red-100', 'text-red-800');
-            } else {
-                messageBox.classList.add('bg-blue-100', 'text-blue-800');
-            }
+        // Pestañas y Contenidos
+        const tabInventoryBtn = document.getElementById('tabInventoryBtn');
+        const tabExpenseBtn = document.getElementById('tabExpenseBtn');
+        const tabLabelsBtn = document.getElementById('tabLabelsBtn');
+        const inventoryContent = document.getElementById('inventoryContent');
+        const expenseContent = document.getElementById('expenseContent');
+        const labelsContent = document.getElementById('labelsContent');
 
-            // Ocultar después de 5 segundos
-            setTimeout(() => {
-                messageBox.classList.add('hidden');
-            }, 5000);
-        }
+        // Formularios
+        const inventoryForm = document.getElementById('inventoryForm');
+        const expenseForm = document.getElementById('expenseForm');
+        const labelForm = document.getElementById('label-form');
 
-        /** Realiza la llamada a la API con manejo de errores y reintentos. */
-        async function fetchWithRetry(url, options = {}, retries = 3) {
-             console.log("Intentando fetch a URL:", url); // Diagnóstico
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(url, options);
-                    if (!response.ok) {
-                        // Si la respuesta no es OK (ej. 404, 500)
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    const data = await response.json();
-                    if (data.status === 'error') {
-                         // Si el script de Apps Script devuelve un error
-                         throw new Error(`Error de servidor: ${data.message}`);
-                    }
-                    return data;
-
-                } catch (error) {
-                    console.error(`Intento ${i + 1} fallido:`, error);
-                    if (i === retries - 1) {
-                        // Si es el último intento, lanza el error.
-                        throw new Error(`Fallo en la comunicación con Google Sheets: ${error.message}. Asegúrate de que el URL de Apps Script sea correcto y esté desplegado.`);
-                    }
-                    // Espera exponencial antes de reintentar
-                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
-                }
-            }
-        }
+        // Elementos de Inventario
+        const movementRadios = document.querySelectorAll('input[name="tipoMovimiento"]');
+        const formIngreso = document.getElementById('formIngreso');
+        const formVenta = document.getElementById('formVenta');
+        const productLinesContainer = document.getElementById('productLines'); 
+        const addProductBtn = document.getElementById('addProductBtn');
+        const saleTotalEl = document.getElementById('saleTotal');
+        const pagoConPOSCheckbox = document.getElementById('pagoConPOS');
+        const posFields = document.getElementById('posFields');
+        const incluyeDeliveryCheckbox = document.getElementById('incluyeDelivery');
+        const deliveryFields = document.getElementById('deliveryFields');
         
-        // --- GESTIÓN DE VISTAS Y ESTADO ---
+        // Etiquetas
+        const labelsContainer = document.getElementById('labels-container');
+        const printBtn = document.getElementById('print-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const addLabelProductBtn = document.getElementById('add-label-product-btn');
+        const labelProductsList = document.getElementById('label-products-list');
+        const actionButtons = document.getElementById('action-buttons');
 
-        /** Muestra la vista de inicio y carga los eventos. */
-        function showStartView() {
-            document.getElementById('startView').classList.remove('hidden');
-            document.getElementById('setupView').classList.add('hidden');
-            document.getElementById('saleView').classList.add('hidden');
-            loadEvents();
+        // Elementos Comunes
+        const loader = document.getElementById('loader');
+        const messageDiv = document.getElementById('message');
+
+        // --- 2. FUNCIONES ---
+
+        function switchTab(activeTab) {
+            messageDiv.textContent = ''; messageDiv.className = 'flex-grow p-4 rounded-lg text-center text-sm';
+            const tabs = { inventory: tabInventoryBtn, expense: tabExpenseBtn, labels: tabLabelsBtn };
+            const contents = { inventory: inventoryContent, expense: expenseContent, labels: labelsContent };
+
+            for (const key in tabs) {
+                const isActive = key === activeTab;
+                tabs[key].classList.toggle('active', isActive);
+                tabs[key].classList.toggle('text-slate-500', !isActive);
+                contents[key].classList.toggle('hidden', !isActive);
+            }
+            actionButtons.classList.toggle('hidden', activeTab !== 'labels');
         }
 
-        /** Muestra la vista de configuración para el evento activo. */
-        function showSetupView(eventName) {
-            document.getElementById('activeEventName').textContent = eventName;
-            document.getElementById('startView').classList.add('hidden');
-            document.getElementById('setupView').classList.remove('hidden');
-            document.getElementById('saleView').classList.add('hidden');
-        }
-
-        /** Muestra la vista de venta con el inventario cargado. */
-        function showSaleView(eventName) {
-            document.getElementById('currentEventName').textContent = eventName;
-            document.getElementById('startView').classList.add('hidden');
-            document.getElementById('setupView').classList.add('hidden');
-            document.getElementById('saleView').classList.remove('hidden');
-            loadInventory();
-        }
-
-        /** Finaliza la sesión de venta y vuelve a la vista de inicio. */
-        function endSession() {
-            if (isScanning) stopScanner();
-            activeEvent = null;
-            localStorage.removeItem('activeEvent');
-            shoppingCart = {};
-            currentInventory = [];
-            showMessage('info', 'Sesión finalizada. Selecciona un nuevo evento.');
-            showStartView();
-        }
-
-        /** Maneja la selección de evento y la transición a SETUP. */
-        function selectEvent() {
-            const selector = document.getElementById('eventSelector');
-            const eventName = selector.value;
-
-            if (eventName) {
-                // Generamos un ID de evento único basado en tiempo
-                activeEvent = {
-                    id: Date.now(),
-                    name: eventName
-                };
-                localStorage.setItem('activeEvent', JSON.stringify(activeEvent));
-                showSetupView(eventName);
-            } else {
-                showMessage('error', 'Por favor, selecciona un evento de la lista.');
+        function toggleInventoryForms() {
+            const selectedValue = document.querySelector('input[name="tipoMovimiento"]:checked').value;
+            formVenta.classList.toggle('hidden', selectedValue !== 'Venta');
+            formIngreso.classList.toggle('hidden', selectedValue === 'Venta');
+            if (selectedValue === 'Venta' && productLinesContainer.children.length === 0) {
+                addProductLine();
             }
         }
         
-        // --- CÁMARA Y ESCANEO CON QUAGGAJS ---
+        // Toggle POS fields
+        pagoConPOSCheckbox.addEventListener('change', () => {
+            posFields.classList.toggle('hidden', !pagoConPOSCheckbox.checked);
+        });
 
-        /** Inicia o detiene el escáner de cámara. */
-        function toggleCameraScanner() {
-            console.log('Botón de cámara presionado.'); // <-- Registro de diagnóstico
-            const scannerContainer = document.getElementById('scannerContainer');
-            const cameraButton = document.getElementById('cameraButton');
-            const cameraIcon = document.getElementById('cameraIcon');
-            const closeIcon = document.getElementById('closeIcon');
+        // Toggle Delivery fields
+        incluyeDeliveryCheckbox.addEventListener('change', () => {
+            deliveryFields.classList.toggle('hidden', !incluyeDeliveryCheckbox.checked);
+        });
 
-            if (scannerContainer.classList.contains('hidden')) {
-                // Iniciar escaneo
-                startScanner();
-                scannerContainer.classList.remove('hidden');
-                cameraIcon.classList.add('hidden');
-                closeIcon.classList.remove('hidden');
-                cameraButton.classList.remove('bg-gray-200');
-                cameraButton.classList.add('bg-red-500', 'text-white');
-            } else {
-                // Detener escaneo
-                stopScanner();
-                scannerContainer.classList.add('hidden');
-                cameraIcon.classList.remove('hidden');
-                closeIcon.classList.add('hidden');
-                cameraButton.classList.add('bg-gray-200');
-                cameraButton.classList.remove('bg-red-500', 'text-white');
-            }
+        function addProductLine() {
+            const lineDiv = document.createElement('div');
+            lineDiv.className = 'product-line grid grid-cols-12 gap-x-2 gap-y-3 items-start border-t pt-3';
+            lineDiv.innerHTML = `
+                <div class="col-span-12 sm:col-span-4">
+                    <select name="producto" class="w-full p-2 border border-slate-300 rounded-md shadow-sm">${productOptionsTemplate.innerHTML}</select>
+                    <div class="stock-display text-right text-sm text-slate-500 font-semibold h-5 mt-1 pr-1"></div>
+                </div>
+                <div class="col-span-4 sm:col-span-2"><input type="number" name="cantidad" min="1" placeholder="Cant." class="w-full p-2 border border-slate-300 rounded-md shadow-sm"></div>
+                <div class="col-span-8 sm:col-span-2"><input type="number" name="precioUnitario" step="0.01" min="0" placeholder="P. Unit." class="w-full p-2 border border-slate-300 rounded-md shadow-sm"></div>
+                <div class="col-span-8 sm:col-span-3"><input type="text" name="subtotal" readonly class="w-full p-2 bg-slate-100 border-slate-300 rounded-md text-right font-medium" value="$0.00"></div>
+                <div class="col-span-4 sm:col-span-1 flex items-center justify-end space-x-2">
+                    <input type="checkbox" name="incluyeIVA" checked class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                    <label class="text-xs text-slate-500">IVA</label>
+                    <button type="button" class="remove-product-btn text-red-500 hover:text-red-700 font-bold p-1 rounded-full leading-none flex items-center justify-center h-6 w-6">✕</button>
+                </div>`;
+            productLinesContainer.appendChild(lineDiv);
         }
 
-        /** Inicializa y comienza el proceso de escaneo con QuaggaJS. */
-        function startScanner() {
-            if (typeof Quagga === 'undefined') {
-                showMessage('error', 'La librería QuaggaJS no está cargada. No se puede escanear.');
-                return;
-            }
-
-            Quagga.init({
-                inputStream : {
-                    name : "Live",
-                    type : "LiveStream",
-                    target: '#scannerContainer', 
-                    constraints: {
-                        width: 600,
-                        height: 250,
-                        facingMode: "environment" // Usa la cámara trasera en móviles
-                    },
-                },
-                decoder : {
-                    readers : ["code_128_reader", "ean_reader", "upc_reader", "ean_8_reader"]
-                },
-                // --- AJUSTES DE PRECISIÓN PARA MÓVILES ---
-                locator: {
-                    patchSize: "medium", // Mejora la detección en móviles
-                    halfSample: true,    // Ayuda al rendimiento en dispositivos lentos
-                },
-                frequency: 10, // Aumenta el número de frames procesados por segundo
-                // --- FIN AJUSTES DE PRECISIÓN ---
-            }, function(err) {
-                if (err) {
-                    showMessage('error', `Error al inicializar el escáner (Permisos de cámara o hardware): ${err.message}.`);
-                    console.error('Error de Quagga.init:', err);
-                    document.getElementById('scannerContainer').classList.add('hidden');
-                    return;
-                }
-                Quagga.start();
-                isScanning = true;
-                showMessage('info', 'Escáner de cámara iniciado. ¡A escanear!');
-            });
-            
-            Quagga.onDetected(function(result) {
-                const code = result.codeResult.code;
-                
-                if (code && code !== lastScannedCode) {
-                    lastScannedCode = code;
-                    addItemToCart(code);
-                    
-                    Quagga.stop(); 
-                    isScanning = false;
-                    
-                    setTimeout(() => {
-                        if (document.getElementById('scannerContainer').classList.contains('hidden')) {
-                             return;
-                        }
-                        Quagga.start(); 
-                        isScanning = true;
-                        lastScannedCode = null; 
-                    }, 1500); 
-                }
-            });
+        function updateLineAndTotal(lineElement) {
+            const qty = parseFloat(lineElement.querySelector('input[name="cantidad"]').value) || 0;
+            const unitPrice = parseFloat(lineElement.querySelector('input[name="precioUnitario"]').value) || 0;
+            const subtotal = qty * unitPrice;
+            lineElement.querySelector('input[name="subtotal"]').value = `$${subtotal.toFixed(2)}`;
+            updateSaleTotal();
         }
 
-        /** Detiene el escáner de QuaggaJS. */
-        function stopScanner() {
-            if (isScanning) {
-                Quagga.stop();
-                isScanning = false;
-                lastScannedCode = null;
-                showMessage('info', 'Escáner de cámara detenido.');
-            }
-        }
-        
-        // --- GESTIÓN DE EVENTOS Y DATOS ---
-        
-        /** Maneja la creación de un nuevo evento. */
-        async function handleCreateEvent() {
-            const input = document.getElementById('newEventName');
-            const eventName = input.value.trim();
-            const button = document.getElementById('createEventButton');
-
-            if (eventName === '') {
-                showMessage('error', 'Por favor, introduce un nombre para el nuevo evento.');
-                return;
-            }
-
-            button.disabled = true;
-            button.textContent = 'Creando...';
-
-            const payload = {
-                operation: 'CREATE_EVENT',
-                eventName: eventName
-            };
-
-            try {
-                const result = await fetchWithRetry(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' }, 
-                    body: JSON.stringify(payload)
-                });
-                
-                showMessage('success', result.message);
-                input.value = ''; // Limpiar campo
-                
-                // Recargar lista de eventos y seleccionar el recién creado
-                await loadEvents(eventName); 
-
-            } catch (error) {
-                showMessage('error', error.message);
-                console.error("Error en handleCreateEvent:", error);
-            } finally {
-                button.disabled = false;
-                button.textContent = 'Crear';
-            }
-        }
-
-        /** Carga la lista de eventos desde Apps Script. */
-        async function loadEvents(selectEventName = null) {
-            const selector = document.getElementById('eventSelector');
-            const button = document.getElementById('startButton');
-            selector.innerHTML = '<option value="" disabled selected>Cargando eventos...</option>';
-            button.disabled = true;
-
-            try {
-                // Notar que la operación se pasa como parámetro URL para GET
-                const result = await fetchWithRetry(`${apiUrl}?operation=GET_EVENTS`, { method: 'GET' });
-                const events = result.data;
-                
-                selector.innerHTML = '';
-                if (events.length === 0) {
-                    selector.innerHTML = '<option value="" disabled selected>No hay eventos creados en Sheets</option>';
-                    button.disabled = true;
-                } else {
-                    selector.innerHTML = '<option value="" disabled selected>-- Selecciona un Evento --</option>';
-                    events.forEach(event => {
-                        const option = document.createElement('option');
-                        option.value = event;
-                        option.textContent = event;
-                        if (event === selectEventName) {
-                            option.selected = true;
-                            button.disabled = false;
-                        }
-                        selector.appendChild(option);
-                    });
-                    // Si se seleccionó uno, habilitar el botón. Si no, esperar a la selección manual.
-                    if (!selectEventName) {
-                        button.disabled = !selector.value;
-                    }
-                    selector.onchange = () => button.disabled = !selector.value;
-                }
-            } catch (error) {
-                showMessage('error', `Error al cargar eventos: ${error.message}`);
-                selector.innerHTML = '<option value="" disabled selected>Error de comunicación</option>';
-            }
-        }
-
-
-        /** Envía los datos de configuración inicial a Apps Script. */
-        async function handleSetup() {
-            if (!activeEvent) {
-                showMessage('error', 'Debe seleccionar un evento primero.');
-                return;
-            }
-
-            const button = document.getElementById('setupButton');
-            button.disabled = true;
-            const originalText = button.textContent;
-            button.textContent = 'Guardando...';
-
-            const productContainers = document.querySelectorAll('#setupForm > div');
-            const productos = [];
-            
-            productContainers.forEach(container => {
-                const nivel = container.getAttribute('data-nivel');
-                const sku = container.querySelector('.sku-input').value;
-                const cantidadInicial = parseInt(container.querySelector('.qty-input').value) || 0;
-                const precio = parseFloat(container.querySelector('.price-input').value) || 0.00;
-
-                if (!sku.trim()) {
-                    throw new Error('El SKU no puede estar vacío.');
-                }
-
-                productos.push({ nivel, sku, cantidadInicial, precio });
-            });
-            
-            const payload = {
-                operation: 'SETUP',
-                productos: productos,
-                eventData: activeEvent // Adjuntamos los datos del evento
-            };
-
-            try {
-                const result = await fetchWithRetry(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' }, 
-                    body: JSON.stringify(payload)
-                });
-                
-                showMessage('success', result.message);
-                
-                showSaleView(activeEvent.name);
-
-            } catch (error) {
-                showMessage('error', error.message);
-                console.error("Error en handleSetup:", error);
-            } finally {
-                button.disabled = false;
-                button.textContent = originalText;
-            }
-        }
-
-        /** Carga el inventario actual de Google Sheets. */
-        async function loadInventory() {
-            const display = document.getElementById('inventoryDisplay');
-            display.innerHTML = '<p class="text-center text-blue-500">Actualizando inventario...</p>';
-            
-            try {
-                // Obtenemos el inventario sin necesidad de pasar el evento, ya que INVENTARIO es el activo.
-                const result = await fetchWithRetry(apiUrl, { method: 'GET' });
-                currentInventory = result.data;
-                renderInventory();
-            } catch (error) {
-                showMessage('error', `Error al cargar inventario: ${error.message}`);
-                display.innerHTML = '<p class="text-center text-red-500">Error al cargar inventario. Revisa el Apps Script.</p>';
-            }
-        }
-
-        /** Renderiza el inventario en la vista de venta. */
-        function renderInventory() {
-            const display = document.getElementById('inventoryDisplay');
-            if (currentInventory.length === 0) {
-                display.innerHTML = '<p class="text-center text-red-500">No hay inventario configurado. Vuelve a la Configuración.</p>';
-                return;
-            }
-
-            display.innerHTML = '';
-            currentInventory.forEach(item => {
-                const stockColor = item.stock > 10 ? 'bg-green-100 text-green-800' : 
-                                   item.stock > 0 ? 'bg-yellow-100 text-yellow-800' : 
-                                   'bg-red-100 text-red-800';
-                
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'flex justify-between items-center p-2 rounded-lg bg-white shadow-sm border';
-                itemDiv.innerHTML = `
-                    <div class="font-medium text-gray-700">${item.nivel} (${item.sku})</div>
-                    <div class="space-x-4 flex items-center">
-                        <span class="text-lg font-bold text-hot-honey">$${item.precio.toFixed(2)}</span>
-                        <span class="text-sm font-semibold px-2 py-1 rounded-full ${stockColor}">Stock: ${item.stock}</span>
-                    </div>
-                `;
-                display.appendChild(itemDiv);
-            });
-        }
-        
-        // --- GESTIÓN DE VENTA Y CARRITO ---
-
-        /** Agrega un artículo al carrito al escanear/ingresar SKU. */
-        function addItemToCart(sku) {
-            sku = sku.trim();
-            if (!sku) return;
-            
-            const inventoryItem = currentInventory.find(item => item.sku === sku);
-            
-            if (!inventoryItem) {
-                showMessage('error', `SKU ${sku} no válido. No se encontró el producto.`);
-                return;
-            }
-
-            if (inventoryItem.stock <= 0) {
-                showMessage('error', `¡AGOTADO! No hay stock para ${inventoryItem.nivel}.`);
-                return;
-            }
-
-            if (shoppingCart[sku]) {
-                if (shoppingCart[sku].cantidad < inventoryItem.stock) {
-                    shoppingCart[sku].cantidad += 1;
-                } else {
-                    showMessage('error', `No puedes agregar más de ${inventoryItem.stock} unidades de ${inventoryItem.nivel} (máximo disponible).`);
-                    return;
-                }
-            } else {
-                shoppingCart[sku] = {
-                    nivel: inventoryItem.nivel,
-                    precio: inventoryItem.precio,
-                    cantidad: 1
-                };
-            }
-            
-            renderCart();
-            updateSaleButtonStatus();
-            showMessage('success', `${inventoryItem.nivel} añadido al carrito.`);
-        }
-
-        /** Renderiza el carrito de compras. */
-        function renderCart() {
-            const itemsContainer = document.getElementById('cartItems');
-            const totalDisplay = document.getElementById('cartTotal');
-            const emptyMessage = document.getElementById('emptyCartMessage');
-            const cartCountDisplay = document.getElementById('cartCount');
-            
+        function updateSaleTotal() {
+            const lines = document.querySelectorAll('.product-line');
             let total = 0;
-            let totalItems = 0;
-            itemsContainer.innerHTML = '';
-
-            for (const sku in shoppingCart) {
-                const item = shoppingCart[sku];
-                const subtotal = item.precio * item.cantidad;
-                total += subtotal;
-                totalItems += item.cantidad;
-
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'flex justify-between items-center p-2 bg-gray-50 rounded-md border-l-4 border-hot-honey';
-                itemDiv.innerHTML = `
-                    <div class="flex-1">
-                        <div class="font-semibold text-gray-800">${item.nivel} (${sku})</div>
-                        <div class="text-sm text-gray-600">$${item.precio.toFixed(2)} c/u</div>
-                    </div>
-                    <div class="text-right">
-                        <div class="font-bold text-lg text-hot-honey">$${subtotal.toFixed(2)}</div>
-                        <div class="text-sm">Cant: ${item.cantidad}</div>
-                    </div>
-                    <button data-sku="${sku}" onclick="removeFromCart('${sku}')" class="ml-2 text-red-500 hover:text-red-700 text-xl font-bold p-1 leading-none">&times;</button>
-                `;
-                itemsContainer.appendChild(itemDiv);
-            }
-
-            totalDisplay.textContent = `$${total.toFixed(2)}`;
-            cartCountDisplay.textContent = `${totalItems} productos`;
-            
-            if (totalItems === 0) {
-                emptyMessage.classList.remove('hidden');
-            } else {
-                emptyMessage.classList.add('hidden');
-            }
+            lines.forEach(line => {
+                const qty = parseFloat(line.querySelector('input[name="cantidad"]').value) || 0;
+                const unitPrice = parseFloat(line.querySelector('input[name="precioUnitario"]').value) || 0;
+                total += qty * unitPrice;
+            });
+            saleTotalEl.textContent = `$${total.toFixed(2)}`;
         }
-
-        /** Elimina o reduce un artículo del carrito. */
-        function removeFromCart(sku) {
-            if (shoppingCart[sku]) {
-                delete shoppingCart[sku];
-                showMessage('info', `Producto removido del carrito.`);
-            }
-            renderCart();
-            updateSaleButtonStatus();
-        }
-
-        /** Habilita/deshabilita el botón de venta. */
-        function updateSaleButtonStatus() {
-            const button = document.getElementById('saleButton');
-            const totalItems = Object.values(shoppingCart).reduce((sum, item) => sum + item.cantidad, 0);
-            button.disabled = totalItems === 0;
-            if (totalItems === 0) {
-                 button.textContent = 'Añade productos para vender';
-                 button.classList.add('disabled-btn');
-                 button.classList.remove('btn-primary');
-            } else {
-                 button.textContent = `Finalizar Venta (Total $${document.getElementById('cartTotal').textContent.slice(1)})`;
-                 button.classList.remove('disabled-btn');
-                 button.classList.add('btn-primary');
-            }
-        }
-
-        /** Finaliza la venta y registra en Apps Script. */
-        async function handleSale() {
-            if (Object.keys(shoppingCart).length === 0) {
-                showMessage('error', 'El carrito está vacío.');
+        
+        async function fetchStock(productName, displayElement) {
+            if (!productName) {
+                displayElement.textContent = '';
                 return;
             }
-
-            const button = document.getElementById('saleButton');
-            button.disabled = true;
-            const originalText = button.textContent;
-            button.textContent = 'Procesando Venta...';
-
-            const carritoArray = Object.keys(shoppingCart).map(sku => ({
-                sku: sku,
-                cantidad: shoppingCart[sku].cantidad
-            }));
-
-            const payload = {
-                operation: 'SALE',
-                carrito: carritoArray,
-                eventData: activeEvent // Adjuntamos los datos del evento
-            };
-
+            displayElement.textContent = '...';
             try {
-                const result = await fetchWithRetry(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify(payload)
-                });
-                
-                showMessage('success', `¡Venta Exitosa! ${result.message}`);
-                
-                shoppingCart = {};
-                renderCart();
-                
-                currentInventory = result.data; 
-                renderInventory();
-
+                const response = await fetch(`${FULL_SCRIPT_URL}?action=getStock&producto=${encodeURIComponent(productName)}`);
+                if (!response.ok) throw new Error('Err');
+                const result = await response.json();
+                displayElement.textContent = result.success ? `Stock: ${result.stock}` : 'Stock: 0';
             } catch (error) {
-                showMessage('error', error.message);
-            } finally {
-                document.getElementById('barcodeInput').focus();
-                button.disabled = false;
-                button.textContent = originalText;
-                updateSaleButtonStatus();
+                displayElement.textContent = 'Err Stock';
             }
         }
-
-        // --- INICIALIZACIÓN ---
-
-        document.addEventListener('DOMContentLoaded', () => {
-            // Revisa si hay un evento activo guardado localmente
-            const savedEvent = localStorage.getItem('activeEvent');
-            
-            if (savedEvent) {
-                activeEvent = JSON.parse(savedEvent);
-                // Si hay un evento activo, salta la selección e intenta cargar el inventario
-                showSaleView(activeEvent.name);
-            } else {
-                // Si no hay evento activo, muestra la vista de inicio para seleccionar
-                showStartView();
+        
+        document.getElementById('productoIngreso').addEventListener('change', (e) => {
+            fetchStock(e.target.value, document.getElementById('stockIngreso'));
+        });
+        productLinesContainer.addEventListener('change', (e) => {
+            if (e.target.name === 'producto') {
+                fetchStock(e.target.value, e.target.parentElement.querySelector('.stock-display'));
             }
         });
+        
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            
+            if (e.target.id === 'label-form') return; 
+
+            loader.style.display = 'block';
+            messageDiv.textContent = '';
+            messageDiv.className = 'flex-grow p-4 rounded-lg text-center text-sm';
+            
+            const formElement = e.target;
+            const formData = new FormData(formElement);
+            let data = { formType: formElement.id.replace('Form', '') };
+            
+            if(data.formType === 'inventory') {
+                 data.tipoMovimiento = formData.get('tipoMovimiento');
+                 if (data.tipoMovimiento === 'Venta') {
+                    const productLines = document.querySelectorAll('#productLines .product-line');
+                    const productos = Array.from(productLines).map(line => ({
+                        producto: line.querySelector('select[name="producto"]').value,
+                        cantidad: line.querySelector('input[name="cantidad"]').value,
+                        precioUnitario: line.querySelector('input[name="precioUnitario"]').value,
+                        incluyeIVA: line.querySelector('input[name="incluyeIVA"]').checked,
+                    }));
+
+                    if (productos.some(p => !p.producto || !p.cantidad || !p.precioUnitario)) {
+                        showMessage('Por favor, complete todos los campos de producto.', 'error');
+                        loader.style.display = 'none';
+                        return;
+                    }
+
+                    data.esMuestra = formData.get('esMuestra') === 'on';
+                    data.pagoConPOS = formData.get('pagoConPOS') === 'on';
+                    data.comisionPOS = formData.get('comisionPOS');
+                    data.incluyeDelivery = formData.get('incluyeDelivery') === 'on';
+                    data.montoDelivery = formData.get('montoDelivery');
+                    data.numeroFactura = formData.get('numeroFactura');
+                    data.descripcionVenta = formData.get('descripcionVenta');
+                    data.productos = productos;
+                 } else { 
+                     data.producto = formData.get('producto');
+                     data.cantidad = formData.get('cantidad');
+                 }
+            } else if (data.formType === 'expense') {
+                 data.tipoGasto = formData.get('tipoGasto');
+                 data.valorGasto = formData.get('valorGasto');
+                 data.gastoIncluyeIVA = formData.get('gastoIncluyeIVA') === 'on';
+                 data.metodoPago = formData.get('metodoPago');
+                 data.descripcionGasto = formData.get('descripcionGasto');
+            }
+
+            try {
+                const response = await fetch(FULL_SCRIPT_URL, {
+                    method: 'POST', mode: 'cors', body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(result.message || '¡Operación registrada!', 'success');
+                    formElement.reset();
+                    if(formElement.id === 'inventoryForm' && data.tipoMovimiento === 'Venta') {
+                         productLinesContainer.innerHTML = '';
+                         addProductLine();
+                         updateSaleTotal();
+                         posFields.classList.add('hidden');
+                         deliveryFields.classList.add('hidden');
+                    }
+                    toggleInventoryForms();
+                    document.getElementById('stockIngreso').textContent = '';
+                } else {
+                     let errorMessage = result.error || 'Error desconocido.';
+                     if (result.error === 'STOCK_INSUFICIENTE') {
+                         errorMessage = `Error: Stock insuficiente para '${result.producto}'. Stock actual: ${result.currentStock}.`;
+                     }
+                    showMessage(errorMessage, 'error');
+                }
+            } catch (error) {
+                showMessage(`Error de conexión: ${error.message}`, 'error');
+            } finally {
+                loader.style.display = 'none';
+            }
+        }
+        
+        // ... [Funciones de Etiquetas] ...
+        function addLabelProductLine() {
+            const newProductEntry = document.createElement('div');
+            newProductEntry.className = 'label-product-entry grid grid-cols-12 gap-2 items-center';
+            newProductEntry.innerHTML = `
+                <div class="col-span-3">
+                    <input type="number" name="quantity" value="1" min="1" placeholder="Cant." required class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm">
+                </div>
+                <div class="col-span-8">
+                    <select name="product" required class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm">${productOptionsTemplate.innerHTML}</select>
+                </div>
+                <div class="col-span-1 text-center">
+                    <button type="button" class="remove-label-product-btn text-red-500 hover:text-red-700 font-bold text-xl">&times;</button>
+                </div>
+            `;
+            labelProductsList.appendChild(newProductEntry);
+        }
+
+        function showMessage(msg, type) {
+            messageDiv.textContent = msg;
+            if (type === 'success') {
+                messageDiv.className = 'flex-grow p-4 rounded-lg text-center text-sm bg-green-100 text-green-800';
+            } else if (type === 'error') {
+                messageDiv.className = 'flex-grow p-4 rounded-lg text-center text-sm bg-red-100 text-red-800';
+            }
+        }
+
+        // --- 3. EVENT LISTENERS E INICIALIZACIÓN ---
+        tabInventoryBtn.addEventListener('click', () => switchTab('inventory'));
+        tabExpenseBtn.addEventListener('click', () => switchTab('expense'));
+        tabLabelsBtn.addEventListener('click', () => switchTab('labels'));
+        
+        inventoryForm.addEventListener('submit', handleFormSubmit);
+        if(expenseForm) expenseForm.addEventListener('submit', handleFormSubmit);
+        
+        movementRadios.forEach(radio => radio.addEventListener('change', toggleInventoryForms));
+        
+        addProductBtn.addEventListener('click', addProductLine);
+        
+        productLinesContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-product-btn')) {
+                e.target.closest('.product-line').remove();
+                updateSaleTotal();
+            }
+        });
+        
+        productLinesContainer.addEventListener('input', (e) => {
+            if (e.target.name === 'cantidad' || e.target.name === 'precioUnitario') {
+                updateLineAndTotal(e.target.closest('.product-line'));
+            }
+        });
+
+        // Event Listeners para Etiquetas
+        addLabelProductBtn.addEventListener('click', addLabelProductLine);
+        labelProductsList.addEventListener('click', (event) => {
+            if (event.target.classList.contains('remove-label-product-btn')) {
+                if(labelProductsList.children.length > 1) event.target.closest('.label-product-entry').remove();
+            }
+        });
+
+        labelForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const name = document.getElementById('labelName').value;
+            const phone = document.getElementById('labelPhone').value;
+            const address = document.getElementById('labelAddress').value;
+            const price = parseFloat(document.getElementById('labelPrice').value).toFixed(2);
+            const paymentMethod = document.getElementById('label-payment-method').value;
+
+            const productEntries = document.querySelectorAll('.label-product-entry');
+            let productsHTML = '<ul class="list-disc list-inside pl-1 text-sm">';
+            productEntries.forEach(entry => {
+                const quantity = entry.querySelector('input[name="quantity"]').value;
+                const product = entry.querySelector('select[name="product"]').value;
+                if (product.trim()) {
+                    productsHTML += `<li>${quantity} x ${product}</li>`;
+                }
+            });
+            productsHTML += '</ul>';
+
+            const labelElement = document.createElement('div');
+            labelElement.classList.add('label');
+            labelElement.innerHTML = `
+                <p><strong>Nombre:</strong> ${name}</p>
+                <p><strong>Teléfono:</strong> ${phone}</p>
+                <p><strong>Dirección:</strong> ${address}</p>
+                <div><strong>Productos:</strong>${productsHTML}</div>
+                <p><strong>Total:</strong> $${price}</p>
+                <p class="mt-2 pt-2 border-t border-slate-200"><strong>Método de Pago:</strong> ${paymentMethod}</p>
+            `;
+            labelsContainer.appendChild(labelElement);
+
+            labelForm.reset();
+            labelProductsList.innerHTML = '';
+            addLabelProductLine();
+            document.getElementById('labelName').focus();
+        });
+
+        printBtn.addEventListener('click', () => window.print());
+        clearBtn.addEventListener('click', () => labelsContainer.innerHTML = '');
+
+        // --- INICIALIZACIÓN GENERAL ---
+        document.getElementById('productoIngreso').innerHTML = productOptionsTemplate.innerHTML;
+        addLabelProductLine(); 
+        toggleInventoryForms();
     </script>
 </body>
 </html>
